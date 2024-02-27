@@ -69,6 +69,10 @@ pub(crate) enum GenericConstantTooComplexSub {
     InlineAsmNotSupported(#[primary_span] Span),
     #[label("unsupported operation in generic constants")]
     OperationNotSupported(#[primary_span] Span),
+    #[label(ty_utils_cilk_spawn_not_supported)]
+    CilkSpawnNotSupported(#[primary_span] Span),
+    #[label(ty_utils_cilk_sync_not_supported)]
+    CilkSyncNotSupported(#[primary_span] Span),
 }
 
 #[derive(Diagnostic)]

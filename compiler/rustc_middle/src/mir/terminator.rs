@@ -500,6 +500,9 @@ impl<'tcx> TerminatorKind<'tcx> {
             TerminatorKind::FalseEdge { .. } => "FalseEdge",
             TerminatorKind::FalseUnwind { .. } => "FalseUnwind",
             TerminatorKind::InlineAsm { .. } => "InlineAsm",
+            TerminatorKind::Detach { .. } => "Detach",
+            TerminatorKind::Reattach { .. } => "Reattach",
+            TerminatorKind::Sync { .. } => "Sync",
         }
     }
 
@@ -552,7 +555,8 @@ mod helper {
                 | Drop { target: ref t, unwind: UnwindAction::Cleanup(u), drop: None, .. }
                 | Drop { target: ref t, unwind: _, drop: Some(u), .. }
                 | Assert { target: ref t, unwind: UnwindAction::Cleanup(u), .. }
-                | FalseUnwind { real_target: ref t, unwind: UnwindAction::Cleanup(u) } => {
+                | FalseUnwind { real_target: ref t, unwind: UnwindAction::Cleanup(u) }
+                | Detach { spawned_task: t, continuation: ref u } => {
                     mk_successors(slice::from_ref(t), Some(u), None)
                 }
                 // single successor
@@ -562,7 +566,10 @@ mod helper {
                 | Yield { resume: ref t, drop: None, .. }
                 | Drop { target: ref t, unwind: _, .. }
                 | Assert { target: ref t, unwind: _, .. }
-                | FalseUnwind { real_target: ref t, unwind: _ } => {
+                | Detach { spawned_task: t, continuation: ref u }
+                | FalseUnwind { real_target: ref t, unwind: _ }
+                | Reattach { continuation: t, destination: _ }
+                | Sync { target: t } => {
                     mk_successors(slice::from_ref(t), None, None)
                 }
                 // No successors
@@ -619,7 +626,14 @@ mod helper {
                         f(u)
                     }
                 }
-                Goto { target } => {
+                Detach {spawned_task, continuation} => {
+                    f(spawned_task);
+                    f(continuation);
+                }
+                Reattach { continuation, _destination } => {
+                    f(continuation);
+                }
+                Goto { target } | Sync { target } => {
                     f(target);
                 }
                 UnwindResume
@@ -663,7 +677,11 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::CoroutineDrop
             | TerminatorKind::Yield { .. }
             | TerminatorKind::SwitchInt { .. }
-            | TerminatorKind::FalseEdge { .. } => None,
+            | TerminatorKind::FalseEdge { .. }
+            // NOTE(jhilton): if unwind behavior changes for spawned tasks, change this code :)
+            | TerminatorKind::Detach { spawned_task: _, continuation: _ }
+            | TerminatorKind::Reattach { continuation: _, destination: _ }
+            | TerminatorKind::Sync { target: _ } => None,
             TerminatorKind::Call { ref unwind, .. }
             | TerminatorKind::Assert { ref unwind, .. }
             | TerminatorKind::Drop { ref unwind, .. }
@@ -684,7 +702,11 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::CoroutineDrop
             | TerminatorKind::Yield { .. }
             | TerminatorKind::SwitchInt { .. }
-            | TerminatorKind::FalseEdge { .. } => None,
+            | TerminatorKind::FalseEdge { .. }
+            // NOTE(jhilton): if unwind behavior changes for spawned tasks, change this code :)
+            | TerminatorKind::Detach { spawned_task: _, continuation: _ }
+            | TerminatorKind::Reattach { continuation: _, destination: _ }
+            | TerminatorKind::Sync { target: _ } => None,
             TerminatorKind::Call { ref mut unwind, .. }
             | TerminatorKind::Assert { ref mut unwind, .. }
             | TerminatorKind::Drop { ref mut unwind, .. }
@@ -828,6 +850,15 @@ impl<'tcx> TerminatorKind<'tcx> {
             },
 
             SwitchInt { ref targets, ref discr } => TerminatorEdges::SwitchInt { targets, discr },
+
+            Detach { spawned_task, continuation } => {
+                TerminatorEdges::Double(spawned_task, continuation)
+            }
+
+            // FIXME(jhilton): we might want AssignOnReturn or something weird like it (AssignOnSync?). Single isn't exactly correct.
+            Reattach { continuation, destination: _ } => TerminatorEdges::Single(continuation),
+
+            Sync { target } => TerminatorEdges::Single(target),
         }
     }
 }

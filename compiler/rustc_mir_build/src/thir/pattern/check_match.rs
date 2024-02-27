@@ -333,7 +333,7 @@ impl<'p, 'tcx> MatchVisitor<'p, 'tcx> {
             | Return { .. } => true,
 
             // These are statements that evaluate to `()`.
-            Assign { .. } | AssignOp { .. } | InlineAsm { .. } | Let { .. } => true,
+            Assign { .. } | AssignOp { .. } | InlineAsm { .. } | Let { .. } | CilkSync => true,
 
             // These evaluate to a value.
             RawBorrow { .. }
@@ -363,7 +363,8 @@ impl<'p, 'tcx> MatchVisitor<'p, 'tcx> {
             | UpvarRef { .. }
             | VarRef { .. }
             | ZstLiteral { .. }
-            | Yield { .. } => true,
+            | Yield { .. }
+            | CilkSpawn { .. } => true,
         }
     }
 

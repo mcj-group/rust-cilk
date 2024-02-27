@@ -391,6 +391,18 @@ fn bcb_filtered_successors<'a, 'tcx>(terminator: &'a Terminator<'tcx>) -> Covera
         // diverges or uses asm goto.
         InlineAsm { targets, .. } => &targets,
 
+        Detach { spawned_task, continuation } => {
+            // We would ideally return an array instead of allocating a Vec here, but that's not
+            // Cow's default behavior.
+            CoverageSuccessors::NotChainable(Cow::Owned(vec![spawned_task, continuation]))
+        }
+        Reattach { ref continuation, destination: _ } => {
+            CoverageSuccessors::NotChainable(Cow::Borrowed(std::slice::from_ref(continuation)))
+        }
+        Sync { ref target } => {
+            CoverageSuccessors::NotChainable(Cow::Borrowed(std::slice::from_ref(target)))
+        }
+
         // These terminators have no coverage-relevant successors.
         CoroutineDrop
         | Return

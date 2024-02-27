@@ -670,6 +670,12 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
             TerminatorKind::Drop { place: destination, .. }
             | TerminatorKind::Call { destination, .. } => Some(destination),
             TerminatorKind::TailCall { .. } => Some(RETURN_PLACE.into()),
+            // FIXME(jhilton): Both Detach and Sync don't do anything in particular with assignments. We should make sure that
+            // a) Sync lets us indicate that the corresponding Reattaches have all run and b) We don't accidentally
+            // turn Syncs into Gotos (but I think that would require actively trying, so it shouldn't happen by accident).
+            TerminatorKind::Detach { .. } => None,
+            TerminatorKind::Sync { .. } => None,
+
         };
 
         // This terminator modifies `place_to_flood`, cleanup the associated conditions.

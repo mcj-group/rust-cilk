@@ -584,7 +584,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             | ExprKind::ThreadLocalRef(_)
             | ExprKind::Call { .. }
             | ExprKind::ByUse { .. }
-            | ExprKind::WrapUnsafeBinder { .. } => {
+            | ExprKind::WrapUnsafeBinder { .. }
+            | ExprKind::CilkSpawn { .. }
+            | ExprKind::CilkSync => {
                 // these are not places, so we need to make a temporary.
                 debug_assert!(!matches!(Category::of(&expr.kind), Some(Category::Place)));
                 let temp_lifetime = this.region_scope_tree.temporary_scope(expr.temp_scope_id);

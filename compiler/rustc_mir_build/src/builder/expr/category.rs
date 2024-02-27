@@ -57,7 +57,13 @@ impl Category {
             | ExprKind::Yield { .. }
             | ExprKind::Call { .. }
             | ExprKind::ByUse { .. }
-            | ExprKind::InlineAsm { .. } => Some(Category::Rvalue(RvalueFunc::Into)),
+            | ExprKind::InlineAsm { .. }
+            | ExprKind::InlineAsm { .. }
+            | ExprKind::CilkSpawn { .. }
+            // NOTE(jhilton): I think this makes sense. It doesn't really fit
+            // into any of these categories very well though. It's a control flow
+            // construct like the other ones that resolve to nonterminating.
+            | ExprKind::CilkSync => Some(Category::Rvalue(RvalueFunc::Into)),
 
             ExprKind::Array { .. }
             | ExprKind::Tuple { .. }

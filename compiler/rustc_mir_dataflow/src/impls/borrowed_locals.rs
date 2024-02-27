@@ -129,7 +129,10 @@ where
             | TerminatorKind::TailCall { .. }
             | TerminatorKind::SwitchInt { .. }
             | TerminatorKind::Unreachable
-            | TerminatorKind::Yield { .. } => {}
+            | TerminatorKind::Yield { .. }
+            | TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => {}
         }
     }
 }

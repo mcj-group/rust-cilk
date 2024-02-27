@@ -1824,7 +1824,7 @@ pub enum ExprKind {
     TryBlock(Box<Block>, Option<Box<Ty>>),
 
     /// A cilk_spawn block (`cilk_spawn { ... }`).
-    // TODO(jhilton): we might be able to generalize this by making this accept a P<Expr> instead.
+    // FIXME(jhilton): we might be able to generalize this by making this accept a P<Expr> instead.
     CilkSpawn(P<Block>),
 
     /// An assignment (`a = foo()`).

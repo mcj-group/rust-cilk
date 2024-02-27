@@ -532,6 +532,18 @@ impl<'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> MoveDataBuilder<'a, 'tcx, F> {
                     }
                 }
             }
+
+            // This makes more sense to me than not creating a move path.
+            // NOTE(jhilton): on panic we should not mark it as initialized, so this will change
+            // when we add abort / unwind handling.
+            TerminatorKind::Reattach { continuation: _, destination } => {
+                self.create_move_path(destination);
+                self.gather_init(destination.as_ref(), InitKind::Deep);
+            }
+
+            // Neither Detach or Sync are responsible for any moves themselves.
+            TerminatorKind::Detach { .. }
+            | TerminatorKind::Sync { .. } => {}
         }
     }
 

@@ -970,6 +970,11 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
                 }
             }
 
+            // NOTE(jhilton): I think this is correct, the only part I'm not sure of is the Deep kind but we used Deep for Call as well.
+            TerminatorKind::Reattach { continuation: _, destination } => {
+                self.mutate_place(loc, (*destination, span), Deep, flow_state);
+            }
+
             TerminatorKind::Goto { target: _ }
             | TerminatorKind::UnwindTerminate(_)
             | TerminatorKind::Unreachable
@@ -977,7 +982,11 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
             | TerminatorKind::Return
             | TerminatorKind::CoroutineDrop
             | TerminatorKind::FalseEdge { real_target: _, imaginary_target: _ }
-            | TerminatorKind::FalseUnwind { real_target: _, unwind: _ } => {
+            | TerminatorKind::FalseUnwind { real_target: _, unwind: _ }
+            | TerminatorKind::Detach { .. }
+            // FIXME(jhilton): I think at some point we're going to need some integration between BorrowCk and Spawn/Sync so we can mark
+            // what regions of code need to have sync types.
+            | TerminatorKind::Sync { .. } => {
                 // no data used, thus irrelevant to borrowck
             }
         }
@@ -1024,6 +1033,21 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
                 }
             }
 
+            // FIXME(jhilton): we might need to do something new here since neither Return or Yield
+            // really do the same thing. Any borrows to locals should be invalidated as long as they're
+            // in the same basic block.
+            TerminatorKind::Reattach { continuation: _, destination: _ } => {
+                // Storage for locals in the current basic block should be dead. This is because
+                // in the continuation we won't be able to use locals from the continuation.
+                // My only problem here is that we only want to kill locals that were created as part of the
+                // current spindle.
+                let borrow_set = self.borrow_set.clone();
+                for i in flow_state.borrows.iter() {
+                    let borrow = &borrow_set[i];
+                    self.check_for_local_borrow(borrow, span);
+                }
+            }
+
             TerminatorKind::UnwindTerminate(_)
             | TerminatorKind::Assert { .. }
             | TerminatorKind::Call { .. }
@@ -1033,7 +1057,10 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
             | TerminatorKind::Goto { .. }
             | TerminatorKind::SwitchInt { .. }
             | TerminatorKind::Unreachable
-            | TerminatorKind::InlineAsm { .. } => {}
+            | TerminatorKind::InlineAsm { .. }
+            | TerminatorKind::Detach { .. }
+            // FIXME(jhilton): think more about this when we're integrating BorrowCk and spawn/sync.
+            | TerminatorKind::Sync { .. } => {}
         }
     }
 }

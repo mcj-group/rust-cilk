@@ -144,7 +144,8 @@ pub enum ExprPrecedence {
     Jump,
     // = += -= *= /= %= &= |= ^= <<= >>=
     Assign,
-    // .. ..=    // TODO(jhilton): make sure the precedence is well-chosen? I don't think it really matters here since there's no nesting of cilk_syncs.
+    // .. ..=    
+    // TODO(jhilton): make sure the precedence is well-chosen? I don't think it really matters here since there's no nesting of cilk_syncs.
     CilkSync,
 
     Range,

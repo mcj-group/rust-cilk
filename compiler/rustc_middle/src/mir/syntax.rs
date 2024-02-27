@@ -718,7 +718,10 @@ pub enum TerminatorKind<'tcx> {
         targets: SwitchTargets,
     },
 
+    // FIXME(jhilton): we have to think about panic handling in a spawned block. May involve changes to
+    //  UnwindResume/UnwindTerminate?
     /// Indicates that the landing pad is finished and that the process should continue unwinding.
+
     ///
     /// Like a return, this marks the end of this invocation of the function.
     ///
@@ -984,6 +987,21 @@ pub enum TerminatorKind<'tcx> {
         /// if and only if InlineAsmOptions::MAY_UNWIND is set.
         unwind: UnwindAction,
     },
+
+    /// Represents an opportunity for logical parallelism: the spawned task and continuation can
+    /// run in parallel. Convention: the spawned task is "to the left", so it should be listed
+    /// first.
+    Detach { spawned_task: BasicBlock, continuation: BasicBlock },
+
+    /// For a spawned task, allows to resume and execute the original continuation. Cilk is
+    /// continuation-stealing so the spawned task will immediately execute, but this should not change
+    /// program semantics.
+    Reattach { continuation: BasicBlock, destination: Place<'tcx> },
+
+    /// Marks a basic block terminated by a cilk_sync, which waits for spawned tasks to complete.
+    /// Representing Sync as a terminator means that we can assume any block after a sync which is not
+    /// after a spawn is completely serial, which is easier to conclude than if Sync was a statement.
+    Sync { target: BasicBlock },
 }
 
 #[derive(

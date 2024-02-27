@@ -40,7 +40,7 @@ symbols! {
         Underscore:         "_",
         // tidy-alphabetical-end
 
-        // TODO(jhilton): do spawn and sync make sense as unstable keywords? At some point they should
+        // NOTE(jhilton): do spawn and sync make sense as unstable keywords? At some point they should
         //  probably become stable keywords.
 
         // Keywords that are used in stable Rust.
