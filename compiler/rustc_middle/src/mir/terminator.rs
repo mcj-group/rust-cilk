@@ -630,7 +630,7 @@ mod helper {
                     f(spawned_task);
                     f(continuation);
                 }
-                Reattach { continuation, _destination } => {
+                Reattach { continuation } => {
                     f(continuation);
                 }
                 Goto { target } | Sync { target } => {
@@ -680,7 +680,7 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::FalseEdge { .. }
             // NOTE(jhilton): if unwind behavior changes for spawned tasks, change this code :)
             | TerminatorKind::Detach { spawned_task: _, continuation: _ }
-            | TerminatorKind::Reattach { continuation: _, destination: _ }
+            | TerminatorKind::Reattach { continuation: _ }
             | TerminatorKind::Sync { target: _ } => None,
             TerminatorKind::Call { ref unwind, .. }
             | TerminatorKind::Assert { ref unwind, .. }
@@ -705,7 +705,7 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::FalseEdge { .. }
             // NOTE(jhilton): if unwind behavior changes for spawned tasks, change this code :)
             | TerminatorKind::Detach { spawned_task: _, continuation: _ }
-            | TerminatorKind::Reattach { continuation: _, destination: _ }
+            | TerminatorKind::Reattach { continuation: _ }
             | TerminatorKind::Sync { target: _ } => None,
             TerminatorKind::Call { ref mut unwind, .. }
             | TerminatorKind::Assert { ref mut unwind, .. }
@@ -855,8 +855,10 @@ impl<'tcx> TerminatorKind<'tcx> {
                 TerminatorEdges::Double(spawned_task, continuation)
             }
 
-            // FIXME(jhilton): we might want AssignOnReturn or something weird like it (AssignOnSync?). Single isn't exactly correct.
-            Reattach { continuation, destination: _ } => TerminatorEdges::Single(continuation),
+            // NOTE(jhilton): when we codegen a reattach, we make sure that the assignment happens before the terminator,
+            // so we shouldn't need to make the edges of some type that expresses that we're going to assign. This simplifies
+            // generating LLVM IR so that we don't have to duplicate the code of an assignment.
+            Reattach { continuation } => TerminatorEdges::Single(continuation),
 
             Sync { target } => TerminatorEdges::Single(target),
         }

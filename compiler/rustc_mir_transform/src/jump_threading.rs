@@ -673,8 +673,9 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
             // FIXME(jhilton): Both Detach and Sync don't do anything in particular with assignments. We should make sure that
             // a) Sync lets us indicate that the corresponding Reattaches have all run and b) We don't accidentally
             // turn Syncs into Gotos (but I think that would require actively trying, so it shouldn't happen by accident).
-            TerminatorKind::Detach { .. } => None,
-            TerminatorKind::Sync { .. } => None,
+            TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => None,
 
         };
 
