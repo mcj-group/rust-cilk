@@ -606,6 +606,7 @@ symbols! {
         cfi,
         cfi_encoding,
         char,
+        cilk,
         client,
         clippy,
         clobber_abi,

@@ -573,6 +573,7 @@ pub fn check_crate(krate: &ast::Crate, sess: &Session, features: &Features) {
             .emit();
         }
     }
+    gate_all!(cilk, "cilk keywords are experimental");
 
     gate_all!(global_registration, "global registration is experimental");
     gate_all!(return_type_notation, "return type notation is experimental");
