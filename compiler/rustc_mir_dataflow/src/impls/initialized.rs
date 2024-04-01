@@ -140,6 +140,22 @@ pub struct MaybeInitializedPlaces<'a, 'tcx> {
     move_data: &'a MoveData<'tcx>,
     exclude_inactive_in_otherwise: bool,
     skip_unreachable_unwind: bool,
+    /// Maps basic blocks to the task they are part of.
+    task_tree: mark_cilk_tasks::TaskTree,
+    /// Maps locations to the state of the dataflow analysis at that location. The locations in this
+    /// map are the last locations of tasks.
+    state_at_last_locations: rustc_data_structures::fx::FxHashMap<
+        Location,
+        MaybeReachable<ChunkedBitSet<MovePathIndex>>,
+    >,
+}
+
+fn task_tree_of_body<'a, 'tcx>(body: &'a Body<'tcx>) -> mark_cilk_tasks::TaskTree {
+    use rustc_middle::mir::visit::Visitor;
+    let mut task_tree = mark_cilk_tasks::TaskTree::new();
+    task_tree.visit_body(body);
+    task_tree.validate();
+    task_tree
 }
 
 impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
@@ -150,6 +166,7 @@ impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
             move_data,
             exclude_inactive_in_otherwise: false,
             skip_unreachable_unwind: false,
+            task_tree: task_tree_of_body(body),
         }
     }
 
@@ -232,9 +249,12 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
     mark_inactive_variants_as_uninit: bool,
     include_inactive_in_otherwise: bool,
     skip_unreachable_unwind: DenseBitSet<mir::BasicBlock>,
+    /// See [MaybeInitializedPlaces::task_tree].
+    task_tree: mark_cilk_tasks::TaskTree,
 }
 
 impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
+    // TODO(jhilton): non-trivial work in constructor :(
     pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
         MaybeUninitializedPlaces {
             tcx,
@@ -243,6 +263,7 @@ impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
             mark_inactive_variants_as_uninit: false,
             include_inactive_in_otherwise: false,
             skip_unreachable_unwind: DenseBitSet::new_empty(body.basic_blocks.len()),
+            task_tree: task_tree_of_body(body),
         }
     }
 
@@ -311,11 +332,12 @@ impl<'tcx> HasMoveData<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
 pub struct EverInitializedPlaces<'a, 'tcx> {
     body: &'a Body<'tcx>,
     move_data: &'a MoveData<'tcx>,
+    task_tree: mark_cilk_tasks::TaskTree,
 }
 
 impl<'a, 'tcx> EverInitializedPlaces<'a, 'tcx> {
     pub fn new(body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
-        EverInitializedPlaces { body, move_data }
+        EverInitializedPlaces { body, move_data, task_tree: task_tree_of_body(body) }
     }
 }
 
@@ -424,6 +446,28 @@ impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {
             Self::update_bits(state, path, s)
         });
+
+        // This lets us track the state before a reattach, which is necessary when we sync.
+        if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
+            self.state_at_last_locations.insert(location, state.clone());
+        } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
+            // Grab the state at all last locations we could be syncing based on the current basic block.
+            let task = self.task_tree.expect_task(location);
+            // We skip the locations that don't exist because a task can have children which aren't synced at this point in the dataflow analysis, since
+            // they can be successors of this sync. This is because tasks don't end on sync.
+            self.task_tree
+                .children_last_locations(task)
+                .filter_map(|last_location| {
+                    self.state_at_last_locations.get(&last_location).cloned()
+                })
+                .for_each(|state_at_last_location| {
+                    // Bottom is uninitialized and top is initialized, and we want to become more initialized, so we go up.
+                    // This makes sense because as we go 'up' in the lattice, we consider more of the state to be initialized.
+                    // `join` provides least-upper-bound and we want the state to become "more initialized" upon a sync.
+                    state.join(&state_at_last_location);
+                });
+        }
+
         edges
     }
 
@@ -534,6 +578,21 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {
             Self::update_bits(state, path, s)
         });
+        if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
+            self.state_at_last_locations.insert(location, trans.clone());
+        } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
+            let task = self.task_tree.expect_task(location);
+            // See the comment in `MaybeInitializedPlaces::terminator_effect` for why we skip locations that have no state.
+            self.task_tree
+                .children_last_locations(task)
+                .filter_map(|location| self.state_at_last_locations.get(&location))
+                .for_each(|state| {
+                    use crate::lattice::MeetSemiLattice;
+                    // Bottom is all-initialized and top is all-uninitialized, so we want to use meet to go lower in the lattice.
+                    trans.meet(state);
+                });
+        }
+
         if self.skip_unreachable_unwind.contains(location.block) {
             let mir::TerminatorKind::Drop { target, unwind, .. } = terminator.kind else { bug!() };
             assert_matches!(unwind, mir::UnwindAction::Cleanup(_));
@@ -669,6 +728,19 @@ impl<'tcx> Analysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
                 })
                 .copied(),
         );
+        if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
+            self.state_at_last_locations.insert(location, trans.clone());
+        } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
+            let task = self.task_tree.expect_task(location);
+            self.task_tree
+                .children_last_locations(task)
+                .filter_map(|location| self.state_at_last_locations.get(&location))
+                .for_each(|state| {
+                    // This lattice has all-uninitialized as the bottom and the join operator adds
+                    // initialized places, so we use join here.
+                    trans.join(state);
+                });
+        }
         terminator.edges()
     }
 
