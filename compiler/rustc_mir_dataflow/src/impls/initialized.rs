@@ -254,7 +254,7 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
-    // TODO(jhilton): non-trivial work in constructor :(
+    // FIXME(jhilton): non-trivial work in constructor :(
     pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
         MaybeUninitializedPlaces {
             tcx,
