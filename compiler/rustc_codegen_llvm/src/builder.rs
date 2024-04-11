@@ -187,6 +187,9 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
             llvm::LLVMSetAlignment(load, align.bytes() as c_uint);
             load
         }
+impl MaybeSupportsTapir for Builder<'_, '_, '_> {
+    fn supports_tapir() -> bool {
+        true
     }
 }
 
@@ -455,6 +458,29 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         }
     }
 
+    fn detach(
+        &mut self,
+        task: &'ll BasicBlock,
+        continuation: &'ll BasicBlock,
+        sync_region: &'ll Value,
+    ) {
+        unsafe {
+            llvm::LLVMBuildDetach(self.llbuilder, task, continuation, sync_region);
+        }
+    }
+
+    fn reattach(&mut self, continuation: &'ll BasicBlock, sync_region: &'ll Value) {
+        unsafe {
+            llvm::LLVMBuildReattach(self.llbuilder, continuation, sync_region);
+        }
+    }
+
+    fn sync(&mut self, target: &'ll BasicBlock, sync_region: &'ll Value) {
+        unsafe {
+            llvm::LLVMBuildSync(self.llbuilder, target, sync_region);
+        }
+    }
+    
     math_builder_methods! {
         add(a, b) => LLVMBuildAdd,
         fadd(a, b) => LLVMBuildFAdd,

@@ -43,6 +43,7 @@ pub trait BuilderMethods<'a, 'tcx>:
     + IntrinsicCallBuilderMethods<'tcx>
     + AsmBuilderMethods<'tcx>
     + StaticBuilderMethods
+    + MaybeSupportsTapir
 {
     // `BackendTypes` is a supertrait of both `CodegenMethods` and
     // `BuilderMethods`. This bound ensures all impls agree on the associated
@@ -136,6 +137,14 @@ pub trait BuilderMethods<'a, 'tcx>:
         instance: Option<Instance<'tcx>>,
     ) -> Self::Value;
     fn unreachable(&mut self);
+    fn detach(
+        &mut self,
+        task_llbb: Self::BasicBlock,
+        continuation_llbb: Self::BasicBlock,
+        sync_region: Self::Value,
+    );
+    fn reattach(&mut self, continuation_llbb: Self::BasicBlock, sync_region: Self::Value);
+    fn sync(&mut self, target_llbb: Self::BasicBlock, sync_region: Self::Value);
 
     /// Like [`Self::unreachable`], but for use in the middle of a basic block.
     fn unreachable_nonterminator(&mut self) {
