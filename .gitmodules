@@ -22,11 +22,6 @@
 	path = src/doc/edition-guide
 	url = https://github.com/rust-lang/edition-guide.git
 	shallow = true
-[submodule "src/llvm-project"]
-	path = src/llvm-project
-	url = https://github.com/rust-lang/llvm-project.git
-	branch = rustc/22.1-2026-01-27
-	shallow = true
 [submodule "src/doc/embedded-book"]
 	path = src/doc/embedded-book
 	url = https://github.com/rust-embedded/book.git
@@ -47,3 +42,8 @@
 	path = src/gcc
 	url = https://github.com/rust-lang/gcc.git
 	shallow = true
+[submodule "src/llvm-project"]
+	path = src/llvm-project
+	url = https://github.com/OpenCilk/opencilk-project.git
+    branch = dev/17.x
+    shallow = true
