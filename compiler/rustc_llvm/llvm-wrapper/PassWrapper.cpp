@@ -669,6 +669,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   Triple TargetTriple(TheModule->getTargetTriple());
   std::unique_ptr<TargetLibraryInfoImpl> TLII(
       new TargetLibraryInfoImpl(TargetTriple));
+  // TODO(jhilton): specify OpenCilk ABI path here? I think we only want to do this if there's LTO, but I'm not sure.
   if (DisableSimplifyLibCalls)
     TLII->disableAllFunctions();
   FAM.registerPass([&] { return TargetLibraryAnalysis(*TLII); });
