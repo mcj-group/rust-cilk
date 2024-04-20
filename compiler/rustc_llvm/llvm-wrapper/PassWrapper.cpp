@@ -392,7 +392,7 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
 
 // FIXME(jhilton): don't hardcode this!
 const StringRef OPENCILK_ABI_PATH =
-    "~/Code/MEng/opencilk/opencilk-project/build/lib/clang/17/lib/darwin/libopencilk-abi_osx.bc";
+    "/Users/jay/Code/MEng/opencilk/build/lib/clang/17/lib/darwin/libopencilk-abi_osx.bc";
 
 void addTapirOptions(TargetLibraryInfoImpl &TLII)
 {
@@ -827,6 +827,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   raw_string_ostream ThinLinkDataOS(ThinLTOBuffer->thin_link_data);
   bool IsLTO = OptStage == LLVMRustOptStage::ThinLTO ||
                OptStage == LLVMRustOptStage::FatLTO;
+  bool const LowerTapir = TLII->hasTapirTarget();
   if (!NoPrepopulatePasses) {
     for (const auto &C : PipelineStartEPCallbacks)
       PB.registerPipelineStartEPCallback(C);
@@ -839,7 +840,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     if (OptLevel == OptimizationLevel::O0 && !IsLTO) {
       // We manually schedule ThinLTOBufferPasses below, so don't pass the value
       // to enable it here.
-      MPM = PB.buildO0DefaultPipeline(OptLevel);
+      MPM = PB.buildO0DefaultPipeline(OptLevel, LowerTapir);
     } else {
       switch (OptStage) {
       case LLVMRustOptStage::PreLinkNoLTO:
@@ -847,7 +848,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
           // This is similar to LLVM's `buildFatLTODefaultPipeline`, where the
           // bitcode for embedding is obtained after performing
           // `ThinLTOPreLinkDefaultPipeline`.
-          MPM.addPass(PB.buildThinLTOPreLinkDefaultPipeline(OptLevel));
+          MPM.addPass(PB.buildThinLTOPreLinkDefaultPipeline(OptLevel, LowerTapir));
           MPM.addPass(ThinLTOBitcodeWriterPass(
               ThinLTODataOS, EmitThinLTOSummary ? &ThinLinkDataOS : nullptr));
           *ThinLTOBufferRef = ThinLTOBuffer.release();
@@ -856,7 +857,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
           MPM.addPass(
               createModuleToFunctionPassAdaptor(AnnotationRemarksPass()));
         } else {
-          MPM = PB.buildPerModuleDefaultPipeline(OptLevel);
+          MPM = PB.buildPerModuleDefaultPipeline(OptLevel, LowerTapir);
         }
         break;
       case LLVMRustOptStage::PreLinkThinLTO:
@@ -870,10 +871,10 @@ extern "C" LLVMRustResult LLVMRustOptimize(
       case LLVMRustOptStage::ThinLTO:
         // FIXME: Does it make sense to pass the ModuleSummaryIndex?
         // It only seems to be needed for C++ specific optimizations.
-        MPM = PB.buildThinLTODefaultPipeline(OptLevel, nullptr);
+        MPM = PB.buildThinLTODefaultPipeline(OptLevel, nullptr, LowerTapir);
         break;
       case LLVMRustOptStage::FatLTO:
-        MPM = PB.buildLTODefaultPipeline(OptLevel, nullptr);
+        MPM = PB.buildLTODefaultPipeline(OptLevel, nullptr, LowerTapir);
         NeedThinLTOBufferPasses = false;
         break;
       }
