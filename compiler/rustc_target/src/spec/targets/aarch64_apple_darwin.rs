@@ -3,6 +3,14 @@ use crate::spec::{Os, SanitizerSet, Target, TargetMetadata, TargetOptions};
 
 pub(crate) fn target() -> Target {
     let (opts, llvm_target, arch) = base(Os::MacOs, Arch::Arm64, TargetEnv::Normal);
+    let mut late_link_args = std::collections::BTreeMap::new();
+    // FIXME(jhilton): this path should reference something inside the build directory at some point
+    let args_to_link_opencilk: Vec<std::borrow::Cow<'static, str>> = vec![
+        "-L".into(),
+        "/Users/jay/Code/MEng/opencilk/build/lib/clang/17/lib/darwin".into(),
+        "-lopencilk_osx_dynamic".into(),
+    ];
+    late_link_args.insert(LinkerFlavor::Darwin(Cc::Yes, Lld::No), args_to_link_opencilk.clone());
     Target {
         llvm_target,
         metadata: TargetMetadata {
@@ -25,6 +33,7 @@ pub(crate) fn target() -> Target {
                 | SanitizerSet::THREAD
                 | SanitizerSet::REALTIME,
             supports_xray: true,
+            late_link_args,
             ..opts
         },
     }
