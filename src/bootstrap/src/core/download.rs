@@ -365,10 +365,64 @@ impl Config {
     [llvm]
     download-ci-llvm = false
     ";
-            self.download_file(&format!("{base}/{llvm_sha}/{filename}"), &tarball, help_on_error);
+            self.download_file(
+                &format!("{base}/{llvm_sha}/{filename}"),
+                &tarball,
+                help_on_error,
+                false,
+            );
         }
         let llvm_root = self.ci_llvm_root();
-        self.unpack(&tarball, &llvm_root, "rust-dev");
+        self.unpack_xz(&tarball, &llvm_root, "rust-dev");
+    }
+
+    // FIXME(jhilton): I think we shouldn't care about this as long as our runtime file detection is relative to llvm-config.
+    // In that case, we still don't redownload to avoid the extra download. Update the docs when runtime file detection is fixed.
+    // Alternatively, we might not need these methods because if it's already in the cache, we're only saving the time to
+    // unpack the tarballs.
+
+    pub(crate) fn maybe_download_opencilk_runtime(&self) {
+        let url = "https://github.com/OpenCilk/cheetah/archive/dev/17.x.tar.gz";
+        let destination = Path::new("src/llvm-project/cheetah");
+        self.maybe_download_opencilk_component(url, destination, Path::new("cheetah-dev"));
+    }
+
+    pub(crate) fn maybe_download_cilktools(&self) {
+        let url = "https://github.com/OpenCilk/productivity-tools/archive/dev/17.x.tar.gz";
+        let destination = Path::new("src/llvm-project/cilktools");
+        self.maybe_download_opencilk_component(
+            url,
+            destination,
+            Path::new("productivity-tools-dev"),
+        );
+    }
+
+    fn maybe_download_opencilk_component(&self, url: &str, destination: &Path, prefix: &Path) {
+        if destination.exists() {
+            return;
+        }
+
+        self.download_opencilk_component(url, destination, prefix);
+    }
+
+    fn download_opencilk_component(&self, url: &str, destination: &Path, prefix: &Path) {
+        if self.dry_run() {
+            return;
+        }
+
+        let file_name = destination.file_name().unwrap();
+        let cache_prefix = format!("opencilk");
+        let cache_dst = self.out.join("cache");
+        let rustc_cache = cache_dst.join(cache_prefix);
+        if !rustc_cache.exists() {
+            t!(fs::create_dir_all(&rustc_cache));
+        }
+        let tarball = rustc_cache.join(&file_name);
+        if !tarball.exists() {
+            self.download_file(url, &tarball, "", true);
+        }
+        // Now the component is at tarball, we have to unpack it into the destination.
+        self.unpack_gzip(&tarball, &destination, prefix);
     }
 
     pub fn download_ci_gcc(&self, gcc_sha: &str, root_dir: &Path) {

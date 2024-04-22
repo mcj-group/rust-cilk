@@ -124,6 +124,9 @@ pub fn prebuilt_llvm_config(
 ) -> LlvmBuildStatus {
     builder.config.maybe_download_ci_llvm();
 
+    builder.config.maybe_download_opencilk_runtime();
+    builder.config.maybe_download_cilktools();
+
     // If we're using a custom LLVM bail out here, but we can only use a
     // custom LLVM for the build triple.
     if let Some(config) = builder.config.target_config.get(&target)
@@ -451,6 +454,7 @@ impl Step for Llvm {
         if target.starts_with("x86_64") && target.contains("ohos") {
             cfg.define("LLVM_TOOL_LLVM_RTDYLD_BUILD", "OFF");
         }
+        // TODO(jhilton): we should also build the OpenCilk runtime.
 
         let mut enabled_llvm_projects = Vec::new();
 
