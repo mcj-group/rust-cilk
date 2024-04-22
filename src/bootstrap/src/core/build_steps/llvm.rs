@@ -454,7 +454,8 @@ impl Step for Llvm {
         if target.starts_with("x86_64") && target.contains("ohos") {
             cfg.define("LLVM_TOOL_LLVM_RTDYLD_BUILD", "OFF");
         }
-        // TODO(jhilton): we should also build the OpenCilk runtime.
+        // We also want to build the cheetah and cilktools runtimes to get the right ABI files.
+        cfg.define("LLVM_ENABLE_RUNTIMES", "cheetah;cilktools");
 
         let mut enabled_llvm_projects = Vec::new();
 
