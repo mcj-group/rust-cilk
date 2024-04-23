@@ -1,15 +1,28 @@
 use crate::spec::base::apple::{Arch, TargetEnv, base};
 use crate::spec::{Os, SanitizerSet, Target, TargetMetadata, TargetOptions};
 
+// Read the environment variable OPENCILK_RT_SEARCH_DIR to get the path to the OpenCilk runtime for
+// this target.
+// FIXME(jhilton): we should have default search paths for this so that we don't need to bother with
+// having users set an environment variable.
+fn opencilk_runtime_search_directory() -> PathBuf {
+    let path = std::env::var("OPENCILK_RT_SEARCH_DIR").expect("OPENCILK_RT_SEARCH_DIR must be set");
+    PathBuf::from(path)
+}
+
 pub(crate) fn target() -> Target {
     let (opts, llvm_target, arch) = base(Os::MacOs, Arch::Arm64, TargetEnv::Normal);
     let mut late_link_args = std::collections::BTreeMap::new();
-    // FIXME(jhilton): this path should reference something inside the build directory at some point
+    let opencilk_runtime_path = opencilk_runtime_search_directory()
+        .into_os_string()
+        .into_string()
+        .expect("OpenCilk runtime path should contain only valid unicode!");
+    let set_rpath = format!("-Wl,-rpath,{}", opencilk_runtime_path);
     let args_to_link_opencilk: Vec<std::borrow::Cow<'static, str>> = vec![
         "-L".into(),
-        "/Users/jay/Code/MEng/opencilk/build/lib/clang/17/lib/darwin".into(),
+        opencilk_runtime_path.into(),
         "-lopencilk_osx_dynamic".into(),
-        "-Wl,-rpath,/Users/jay/Code/MEng/opencilk/build/lib/clang/17/lib/darwin".into(),
+        set_rpath.into(),
     ];
     late_link_args.insert(LinkerFlavor::Darwin(Cc::Yes, Lld::No), args_to_link_opencilk.clone());
     Target {
