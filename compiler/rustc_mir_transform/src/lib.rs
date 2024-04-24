@@ -667,6 +667,9 @@ fn run_runtime_cleanup_passes<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         &lower_intrinsics::LowerIntrinsics,
         &remove_place_mention::RemovePlaceMention,
         &simplify::SimplifyCfg::PreOptimizations,
+        // NOTE(jhilton): this might not be the best place to insert syncs: we could also do it while lowering
+        // analysis to runtime MIR.
+        &automatic_sync_insertion::InsertSyncs,
     ];
 
     pm::run_passes(
