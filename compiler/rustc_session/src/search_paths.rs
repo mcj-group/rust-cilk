@@ -128,6 +128,11 @@ impl SearchPath {
         Self::new(PathKind::All, make_target_lib_path(sysroot, triple))
     }
 
+    pub fn from_opencilk_runtime_path(opencilk_rt_path: &Path) -> Self {
+        Self::new(PathKind::Native, opencilk_rt_path.to_path_buf())
+    }
+
+
     pub fn new(kind: PathKind, dir: PathBuf) -> Self {
         // Get the files within the directory.
         let mut files = match std::fs::read_dir(&dir) {

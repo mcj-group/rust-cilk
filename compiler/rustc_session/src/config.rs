@@ -2668,6 +2668,11 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
         )
     }
 
+    let opencilk_rt_path =
+    std::env::var("OPENCILK_RT_SEARCH_DIR").expect("OPENCILK_RT_SEARCH_DIR must be set");
+    let opencilk_rt_path = Path::new(&opencilk_rt_path);
+    search_paths.push(SearchPath::from_opencilk_runtime_path(opencilk_rt_path));
+
     // Parse any `-l` flags, which link to native libraries.
     let libs = parse_native_libs(early_dcx, &unstable_opts, unstable_features, matches);
 
