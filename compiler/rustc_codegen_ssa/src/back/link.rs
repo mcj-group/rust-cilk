@@ -1297,6 +1297,22 @@ fn link_sanitizer_runtime(
     }
 }
 
+fn find_opencilk_runtime(_sess: &Session) -> PathBuf {
+    // FIXME(jhilton): do something smarter here to find the OpenCilk runtime.
+    let path = std::env::var("OPENCILK_RT_SEARCH_DIR").expect("OPENCILK_RT_SEARCH_DIR must be set");
+    PathBuf::from(path)
+}
+
+fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
+    // First, we want to add the OpenCilk runtime to the search path.
+    let opencilk_runtime_search_dir = find_opencilk_runtime(sess);
+    linker.include_path(&opencilk_runtime_search_dir);
+
+    let name = if sess.target.is_like_osx { "opencilk_osx_dynamic" } else { "opencilk" };
+    // Lastly, we link the OpenCilk runtime libraries.
+    linker.link_dylib_by_name(name, false, true);
+}
+
 /// Returns a boolean indicating whether the specified crate should be ignored
 /// during LTO.
 ///
@@ -2330,6 +2346,7 @@ fn linker_with_args(
     // Sanitizer libraries.
     add_sanitizer_libraries(sess, flavor, crate_type, cmd);
 
+
     // Object code from the current crate.
     // Take careful note of the ordering of the arguments we pass to the linker
     // here. Linkers will assume that things on the left depend on things to the
@@ -2388,6 +2405,9 @@ fn linker_with_args(
         tmpdir,
         link_output_kind,
     );
+
+    // OpenCilk runtime.
+    add_opencilk_runtime(sess, cmd);
 
     // Upstream rust crates and their non-dynamic native libraries.
     add_upstream_rust_crates(
