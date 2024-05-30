@@ -383,6 +383,7 @@ impl<'v> hir_visit::Visitor<'v> for StatCollector<'v> {
                 Err,
                 CilkSpawn,
                 CilkSync,
+                CilkScope,
             ]
         );
         hir_visit::walk_expr(self, e)

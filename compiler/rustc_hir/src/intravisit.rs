@@ -991,6 +991,9 @@ pub fn walk_generic_arg<'v, V: Visitor<'v>>(
             visitor.visit_expr(expr);
         }
         ExprKind::CilkSync => {}
+        ExprKind::CilkScope(block) => {
+            visitor.visit_block(block);
+        }
     }
 }
 

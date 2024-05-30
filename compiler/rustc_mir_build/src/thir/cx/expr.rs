@@ -1101,6 +1101,10 @@ impl<'tcx> ThirBuildCx<'tcx> {
             hir::ExprKind::CilkSpawn(expr) => {
                 ExprKind::CilkSpawn { computation: self.mirror_expr(expr) }
             }
+            hir::ExprKind::CilkScope(block) => {
+                // FIXME(jhilton): this should lower to a specific THIR variant instead.
+                ExprKind::Block { block: self.mirror_block(block) }
+            }
             hir::ExprKind::CilkSync => ExprKind::CilkSync,
             hir::ExprKind::Err(_) => unreachable!("cannot lower a `hir::ExprKind::Err` to THIR"),
         };

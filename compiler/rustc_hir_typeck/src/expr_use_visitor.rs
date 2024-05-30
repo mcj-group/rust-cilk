@@ -571,7 +571,8 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                 self.consume_expr(value)?;
             }
 
-            hir::ExprKind::CilkSpawn(block) => self.consume_expr(block),
+            hir::ExprKind::CilkSpawn(expr) => self.consume_expr(expr),
+            hir::ExprKind::CilkScope(block) => self.walk_block(block),
         }
 
         Ok(())

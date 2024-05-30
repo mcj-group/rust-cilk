@@ -2481,6 +2481,7 @@ impl Expr<'_> {
             | ExprKind::Unary(..) => ExprPrecedence::Prefix,
             
             ExprKind::CilkSpawn(..) => ExprPrecedence::CilkSpawn,
+            ExprKind::CilkScope(..) => ExprPrecedence::CilkScope,
             ExprKind::CilkSync => ExprPrecedence::CilkSync,
 
             // Need parens if and only if there are prefix attributes.
@@ -2579,6 +2580,7 @@ impl Expr<'_> {
             | ExprKind::Yield(..)
             | ExprKind::Cast(..)
             | ExprKind::CilkSpawn(..)
+            | ExprKind::CilkScope(..)
             | ExprKind::CilkSync
             | ExprKind::DropTemps(..) => false,
         }
@@ -2696,6 +2698,7 @@ impl Expr<'_> {
             | ExprKind::Yield(..)
             | ExprKind::DropTemps(..)
             | ExprKind::CilkSpawn(..)
+            | ExprKind::CilkScope(..)
             | ExprKind::CilkSync
             | ExprKind::Err(_) => true,
         }
@@ -2937,6 +2940,9 @@ pub enum ExprKind<'hir> {
     UnsafeBinderCast(UnsafeBinderCastKind, &'hir Expr<'hir>, Option<&'hir Ty<'hir>>),
     /// An expression that makes the right-hand side potentially parallel with the continuation.
     CilkSpawn(&'hir Expr<'hir>),
+
+    /// An expression that implicitly syncs at the end of the contained block.
+    CilkScope(&'hir Block<'hir>),
 
     /// A suspension point for spawned tasks.
     CilkSync,
