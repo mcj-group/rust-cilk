@@ -1061,12 +1061,17 @@ macro_rules! common_visitor_and_walkers {
                     visit_visitable!($($mut)? vis, body, optional_type),
                 ExprKind::Lit(token) =>
                     visit_visitable!($($mut)? vis, token),
+                ExprKind::CilkSpawn(body) =>
+                    visit_visitable!($($mut)? vis, body),
+                ExprKind::CilkScope(body) =>
+                    visit_visitable!($($mut)? vis, body),
                 ExprKind::IncludedBytes(bytes) =>
                     visit_visitable!($($mut)? vis, bytes),
                 ExprKind::UnsafeBinderCast(kind, expr, ty) =>
                     visit_visitable!($($mut)? vis, kind, expr, ty),
                 ExprKind::Err(_guar) => {}
                 ExprKind::Dummy => {}
+                ExprKind::CilkSync => {}
             }
 
             visit_span(vis, span)

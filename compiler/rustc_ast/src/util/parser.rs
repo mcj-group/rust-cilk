@@ -147,6 +147,7 @@ pub enum ExprPrecedence {
     // .. ..=    
     // TODO(jhilton): make sure the precedence is well-chosen? I don't think it really matters here since there's no nesting of cilk_syncs.
     CilkSync,
+    CilkSpawn,
 
     Range,
     // ||
