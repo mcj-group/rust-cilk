@@ -408,6 +408,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             | ExprKind::PlaceUnwrapUnsafeBinder { .. }
             | ExprKind::ValueUnwrapUnsafeBinder { .. }
             | ExprKind::CilkSpawn { .. }
+            | ExprKind::CilkScope { .. }
             | ExprKind::CilkSync => {
                 // these do not have corresponding `Rvalue` variants,
                 // so make an operand and then return that

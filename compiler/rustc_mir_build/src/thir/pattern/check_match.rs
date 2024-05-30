@@ -364,7 +364,8 @@ impl<'p, 'tcx> MatchVisitor<'p, 'tcx> {
             | VarRef { .. }
             | ZstLiteral { .. }
             | Yield { .. }
-            | CilkSpawn { .. } => true,
+            | CilkSpawn { .. }
+            | CilkScope { .. } => true,
         }
     }
 

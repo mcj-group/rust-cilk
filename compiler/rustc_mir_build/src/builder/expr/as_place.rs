@@ -586,6 +586,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             | ExprKind::ByUse { .. }
             | ExprKind::WrapUnsafeBinder { .. }
             | ExprKind::CilkSpawn { .. }
+            | ExprKind::CilkScope { .. }
             | ExprKind::CilkSync => {
                 // these are not places, so we need to make a temporary.
                 debug_assert!(!matches!(Category::of(&expr.kind), Some(Category::Place)));

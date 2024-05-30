@@ -202,6 +202,9 @@ fn recurse_build<'tcx>(
         ExprKind::CilkSpawn { .. } => {
             error(GenericConstantTooComplexSub::CilkSpawnNotSupported(node.span))?
         }
+        ExprKind::CilkScope { .. } => {
+            error(GenericConstantTooComplexSub::CilkScopeNotSupported(node.span))?
+        }
         ExprKind::CilkSync => error(GenericConstantTooComplexSub::CilkSyncNotSupported(node.span))?,
 
         // we dont permit let stmts so `VarRef` and `UpvarRef` cant happen
@@ -309,6 +312,7 @@ impl<'a, 'tcx> IsThirPolymorphic<'a, 'tcx> {
             | thir::ExprKind::ThreadLocalRef(_)
             | thir::ExprKind::Yield { .. }
             | thir::ExprKind::CilkSpawn { .. }
+            | thir::ExprKind::CilkScope { .. }
             | thir::ExprKind::CilkSync => false,
         }
     }
