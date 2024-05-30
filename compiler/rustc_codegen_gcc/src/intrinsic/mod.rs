@@ -726,6 +726,18 @@ impl<'a, 'gcc, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'a, 'gcc, 'tc
         // TODO(antoyo): implement.
         self.context.new_rvalue_from_int(self.int_type, 0)
     }
+
+    fn sync_region_start(&mut self) -> RValue<'gcc> {
+        unimplemented!();
+    }
+
+    fn tapir_runtime_start(&mut self) -> RValue<'gcc> {
+        unimplemented!();
+    }
+
+    fn tapir_runtime_stop(&mut self, token: RValue<'gcc>) {
+        unimplemented!()
+    }
 }
 
 impl<'a, 'gcc, 'tcx> ArgAbiBuilderMethods<'tcx> for Builder<'a, 'gcc, 'tcx> {
