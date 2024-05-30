@@ -435,6 +435,9 @@ language_item_table! {
     // Reborrowing related lang-items
     Reborrow,                sym::reborrow,            reborrow,                   Target::Trait,          GenericRequirement::Exact(0);
     CoerceShared,            sym::coerce_shared,       coerce_shared,              Target::Trait,          GenericRequirement::Exact(0);
+    // Some language items related to Tapir lowering. cilk_scope needs the ability to hint that the runtime should start and stop.
+    TapirRuntimeStart,      sym::tapir_runtime_start,  tapir_runtime_start,        Target::Fn,             GenericRequirement::None;
+    TapirRuntimeStop,       sym::tapir_runtime_stop,   tapir_runtime_stop,         Target::Fn,             GenericRequirement::None;
 }
 
 /// The requirement imposed on the generics of a lang item

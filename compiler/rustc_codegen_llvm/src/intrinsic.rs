@@ -820,8 +820,17 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         self.call_intrinsic("llvm.va_end", &[self.val_ty(va_list)], &[va_list])
     }
 
-    fn sync_region_start(&mut self) -> Self::Value {
+    fn sync_region_start(&mut self) -> &'ll Value {
         self.call_intrinsic("llvm.syncregion.start", &[])
+    }
+
+    fn tapir_runtime_start(&mut self) -> &'ll Value {
+       self.call_intrinsic("tapir.runtime.start", &[])
+    }
+
+    fn tapir_runtime_stop(&mut self, token: &'ll Value) {
+        // This intrinsic should return void anyways.
+        self.call_intrinsic("tapir.runtime.stop", &[token]);
     }
 }
 

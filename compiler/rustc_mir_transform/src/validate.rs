@@ -1552,6 +1552,9 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     self.fail(location, format!("bad arg ({op_cnt_ty} != usize)"))
                 }
             }
+            // These hints both have no invariants.
+            StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStart)
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStop) => {}
             StatementKind::SetDiscriminant { place, .. } => {
                 if self.body.phase < MirPhase::Runtime(RuntimePhase::Initial) {
                     self.fail(location, "`SetDiscriminant`is not allowed until deaggregation");

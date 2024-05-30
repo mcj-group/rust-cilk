@@ -494,7 +494,8 @@ macro_rules! make_mir_visitor {
                                 self.visit_operand(src, location);
                                 self.visit_operand(dst, location);
                                 self.visit_operand(count, location);
-                            }
+                            },
+                            NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop => {},
                         }
                     }
                     StatementKind::BackwardIncompatibleDropHint { place, .. } => {
