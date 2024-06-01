@@ -170,8 +170,6 @@ fn call_simple_intrinsic<'ll, 'tcx>(
         sym::roundf32 => ("llvm.round", &[bx.type_f32()]),
         sym::roundf64 => ("llvm.round", &[bx.type_f64()]),
         sym::roundf128 => ("llvm.round", &[bx.type_f128()]),
-        // We need sync regions to generate Tapir IR.
-        sym::sync_region_start => "llvm.syncregion.start",
         _ => return None,
     };
     Some(bx.call_intrinsic(
