@@ -33,6 +33,7 @@ pub mod move_paths;
 pub mod points;
 pub mod rustc_peek;
 mod un_derefer;
+mod task_info;
 pub mod value_analysis;
 
 pub struct MoveDataTypingEnv<'tcx> {
