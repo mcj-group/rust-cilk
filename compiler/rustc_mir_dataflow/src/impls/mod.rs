@@ -3,6 +3,7 @@ mod initialized;
 mod liveness;
 mod logically_parallel_tasks;
 mod storage_liveness;
+mod syncable_tasks;
 
 pub use self::borrowed_locals::{MaybeBorrowedLocals, borrowed_locals};
 pub use self::initialized::{
