@@ -5,6 +5,7 @@
 #![feature(exact_size_is_empty)]
 #![feature(file_buffered)]
 #![feature(never_type)]
+#![feature(trait_alias)]
 #![feature(try_blocks)]
 // tidy-alphabetical-end
 
