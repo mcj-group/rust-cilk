@@ -145,6 +145,8 @@ pub struct MaybeInitializedPlaces<'a, 'tcx> {
     move_data: &'a MoveData<'tcx>,
     exclude_inactive_in_otherwise: bool,
     skip_unreachable_unwind: bool,
+    #[allow(unused)]
+    task_info: TaskInfo,
     /// Maps basic blocks to the task they are part of.
     task_tree: TaskTree,
     /// Maps locations to the state of the dataflow analysis at that location. The locations in this
@@ -163,6 +165,7 @@ impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
             move_data,
             exclude_inactive_in_otherwise: false,
             skip_unreachable_unwind: false,
+            task_info: TaskInfo::from_body(body),
             task_tree: TaskTree::from_body(body),
             state_at_last_locations: rustc_data_structures::fx::FxHashMap::default(),
         }
