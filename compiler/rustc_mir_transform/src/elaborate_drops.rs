@@ -1,11 +1,11 @@
 use std::fmt;
-
+use rustc_mir_dataflow::task_info::TaskInfo;
 use rustc_abi::{FieldIdx, VariantIdx};
 use rustc_index::IndexVec;
 use rustc_index::bit_set::DenseBitSet;
 use rustc_middle::mir::*;
 use rustc_middle::ty::{self, TyCtxt};
-use rustc_mir_dataflow::impls::{MaybeInitializedPlaces, MaybeUninitializedPlaces};
+use rustc_mir_dataflow::impls::{definitely_synced_tasks, maybe_synced_tasks, MaybeInitializedPlaces, MaybeUninitializedPlaces};
 use rustc_mir_dataflow::move_paths::{LookupResult, MoveData, MovePathIndex};
 use rustc_mir_dataflow::{
     Analysis, DropFlagState, MoveDataTypingEnv, ResultsCursor, on_all_children_bits,
@@ -60,14 +60,18 @@ impl<'tcx> crate::MirPass<'tcx> for ElaborateDrops {
         let elaborate_patch = {
             let env = MoveDataTypingEnv { move_data, typing_env };
 
-            let mut inits = MaybeInitializedPlaces::new(tcx, body, &env.move_data)
+            let task_info = TaskInfo::from_body(body);
+            let maybe_synced_tasks = maybe_synced_tasks(tcx, body, &task_info);
+            let definitely_synced_tasks = definitely_synced_tasks(tcx, body, &task_info);
+            let mut inits = MaybeInitializedPlaces::new(tcx, body, &env.move_data, &task_info, &maybe_synced_tasks)
                 .exclude_inactive_in_otherwise()
                 .skipping_unreachable_unwind()
                 .iterate_to_fixpoint(tcx, body, Some("elaborate_drops"))
                 .into_results_cursor(body);
             let dead_unwinds = compute_dead_unwinds(body, &mut inits);
 
-            let uninits = MaybeUninitializedPlaces::new(tcx, body, &env.move_data)
+            let uninits = MaybeUninitializedPlaces::new(tcx, body, &env.move_data, &task_info,
+                &definitely_synced_tasks)
                 .include_inactive_in_otherwise()
                 .mark_inactive_variants_as_uninit()
                 .skipping_unreachable_unwind(dead_unwinds)

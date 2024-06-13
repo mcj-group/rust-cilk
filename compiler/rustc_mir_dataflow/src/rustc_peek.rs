@@ -10,8 +10,12 @@ use crate::errors::{
     PeekMustBePlaceOrRefPlace, StopAfterDataFlowEndedCompilation,
 };
 use crate::framework::BitSetExt;
-use crate::impls::{MaybeInitializedPlaces, MaybeLiveLocals, MaybeUninitializedPlaces};
 use crate::move_paths::{HasMoveData, LookupResult, MoveData, MovePathIndex};
+use crate::impls::{
+    definitely_synced_tasks, maybe_synced_tasks, DefinitelyInitializedPlaces,
+    MaybeInitializedPlaces, MaybeLiveLocals, MaybeUninitializedPlaces,
+};
+use crate::task_info::TaskInfo;
 use crate::{Analysis, JoinSemiLattice, ResultsCursor};
 
 pub fn sanity_check<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) {
@@ -26,8 +30,12 @@ pub fn sanity_check<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) {
             sanity_check_via_rustc_peek(tcx, flow_inits);
         }
 
+        let task_info = TaskInfo::from_body(body);
+        let maybe_synced_tasks = maybe_synced_tasks(tcx, body, &task_info);
+        let definitely_synced_tasks = definitely_synced_tasks(tcx, body, &task_info);
+
         if kind.contains(&RustcMirKind::PeekMaybeUninit) {
-            let flow_uninits = MaybeUninitializedPlaces::new(tcx, body, &move_data)
+            let flow_uninits = MaybeUninitializedPlaces::new(tcx, body, &move_data, &task_info, &definitely_synced_tasks)
                 .iterate_to_fixpoint(tcx, body, None)
                 .into_results_cursor(body);
             sanity_check_via_rustc_peek(tcx, flow_uninits);

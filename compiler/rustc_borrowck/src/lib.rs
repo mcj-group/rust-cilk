@@ -41,9 +41,12 @@ use rustc_middle::mir::*;
 use rustc_middle::query::Providers;
 use rustc_middle::ty::{
     self, ParamEnv, RegionVid, Ty, TyCtxt, TypeFoldable, TypeVisitable, TypingMode, fold_regions,
+}
+use rustc_mir_dataflow::task_info::TaskInfo;
+use rustc_mir_dataflow::impls::{
+    definitely_synced_tasks, maybe_synced_tasks, EverInitializedPlaces, MaybeInitializedPlaces,
 };
 use rustc_middle::{bug, span_bug};
-use rustc_mir_dataflow::impls::{EverInitializedPlaces, MaybeUninitializedPlaces};
 use rustc_mir_dataflow::move_paths::{
     InitIndex, InitLocation, LookupResult, MoveData, MovePathIndex,
 };

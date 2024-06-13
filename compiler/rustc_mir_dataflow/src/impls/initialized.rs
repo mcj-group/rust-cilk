@@ -104,9 +104,7 @@ impl<'tcx> MaybePlacesSwitchIntData<'tcx> {
     }
 }
 
-use super::syncable_tasks::{
-    definitely_synced_tasks, maybe_synced_tasks, DefinitelySyncedTasks, MaybeSyncedTasks,
-};
+use super::syncable_tasks::{DefinitelySyncedTasks, MaybeSyncedTasks};
 
 /// `MaybeInitializedPlaces` tracks all places that might be
 /// initialized upon reaching a particular point in the control flow
@@ -253,8 +251,8 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
     mark_inactive_variants_as_uninit: bool,
     include_inactive_in_otherwise: bool,
     /// See [MaybeInitializedPlaces::task_info].
-    task_info: TaskInfo,
-    definitely_synced_tasks: DefinitelySyncedTasks,
+    task_info: &'a TaskInfo,
+    definitely_synced_tasks: &'a DefinitelySyncedTasks,
     /// See [MaybeInitializedPlaces::state_at_last_locations].
     state_at_last_locations: FxHashMap<Location, ChunkedBitSet<MovePathIndex>>,
 }

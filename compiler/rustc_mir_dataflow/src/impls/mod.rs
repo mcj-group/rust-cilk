@@ -17,3 +17,7 @@ pub use self::liveness::{
 pub use self::storage_liveness::{
     MaybeRequiresStorage, MaybeStorageDead, MaybeStorageLive, always_storage_live_locals,
 };
+pub use self::syncable_tasks::{
+    definitely_synced_tasks, maybe_synced_tasks, DefinitelySyncableTasks, DefinitelySyncedTasks,
+    MaybeSyncableTasks, MaybeSyncedTasks,
+};
