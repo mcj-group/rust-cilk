@@ -17,7 +17,6 @@ use crate::mark_cilk_tasks::TaskTree;
 use crate::drop_flag_effects_for_function_entry;
 use crate::elaborate_drops::DropFlagState;
 use crate::framework::SwitchIntEdgeEffects;
-use crate::mark_cilk_tasks::TaskTree;
 use crate::task_info::TaskInfo;
 use crate::move_paths::{HasMoveData, InitIndex, InitKind, LookupResult, MoveData, MovePathIndex};
 use crate::{
@@ -341,14 +340,20 @@ impl<'tcx> HasMoveData<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
 pub struct EverInitializedPlaces<'a, 'tcx> {
     body: &'a Body<'tcx>,
     move_data: &'a MoveData<'tcx>,
-    task_tree: mark_cilk_tasks::TaskTree,
-    state_at_last_locations:
-        rustc_data_structures::fx::FxHashMap<Location, ChunkedBitSet<InitIndex>>,
+    task_info: &'a TaskInfo,
+    maybe_synced_tasks: &'a MaybeSyncedTasks,
+    state_at_last_locations: FxHashMap<Location, ChunkedBitSet<InitIndex>>,
 }
 
 impl<'a, 'tcx> EverInitializedPlaces<'a, 'tcx> {
-    pub fn new(body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
-        EverInitializedPlaces { body, move_data, task_tree: task_tree_of_body(body), state_at_last_locations: rustc_data_structures::fx::FxHashMap::default() }
+    pub fn new(body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>, task_info: &'a TaskInfo, maybe_synced_tasks: &'a MaybeSyncedTasks) -> Self {
+        EverInitializedPlaces { 
+            body, 
+            move_data, 
+            task_info,
+            maybe_synced_tasks,
+            state_at_last_locations: FxHashMap::default(),
+        }
     }
 }
 
@@ -748,14 +753,21 @@ impl<'tcx> Analysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
         if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
             self.state_at_last_locations.insert(location, trans.clone());
         } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
-            let task = self.task_tree.expect_task(location);
-            self.task_tree
-                .descendant_last_locations(task)
-                .filter_map(|location| self.state_at_last_locations.get(&location))
+            let synced_tasks = self.maybe_synced_tasks.synced_tasks_at(&location);
+            // We want to say that a state is definitely initialized if it is definitely initialized in some synced child.
+            // A state is ever initialized if it is ever initialized in some synced child.
+            synced_tasks
+                .iter()
+                .map(|task| self.task_info.expect_last_location(*task))
+                .map(|last_location| {
+                    self.state_at_last_locations
+                        .get(&last_location)
+                        .expect("expected last location to have already been visited!")
+                })
                 .for_each(|state| {
                     // This lattice has all-uninitialized as the bottom and the join operator adds
                     // initialized places, so we use join here.
-                    trans.join(state);
+                    trans.join(&state);
                 });
         }
         terminator.edges()
