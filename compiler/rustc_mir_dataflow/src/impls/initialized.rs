@@ -103,7 +103,9 @@ impl<'tcx> MaybePlacesSwitchIntData<'tcx> {
     }
 }
 
-use super::syncable_tasks::{maybe_synced_tasks, MaybeSyncedTasks};
+use super::syncable_tasks::{
+    definitely_synced_tasks, maybe_synced_tasks, DefinitelySyncedTasks, MaybeSyncedTasks,
+};
 
 /// `MaybeInitializedPlaces` tracks all places that might be
 /// initialized upon reaching a particular point in the control flow
@@ -149,22 +151,16 @@ pub struct MaybeInitializedPlaces<'a, 'tcx> {
     skip_unreachable_unwind: bool,
     /// Stores information about tasks: their last locations, the spindles they contain, and their
     /// parent-child relationships, for example.
-    task_info: TaskInfo,
+    task_info: &'a TaskInfo,
     /// Maps locations to the tasks which may be synced at a given location (must be a sync).
-    maybe_synced_tasks: MaybeSyncedTasks,
+    maybe_synced_tasks: &'a MaybeSyncedTasks,
     /// Maps locations to the state of the dataflow analysis at that location. The locations in this
     /// map are the last locations of tasks.
-    state_at_last_locations: rustc_data_structures::fx::FxHashMap<
-        Location,
-        MaybeReachable<ChunkedBitSet<MovePathIndex>>,
-    >,
+    state_at_last_locations: FxHashMap<Location, MaybeReachable<ChunkedBitSet<MovePathIndex>>>,
 }
 
 impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
-        // FIXME(jhilton): I don't like that this constructor does non-trivial work. Make the task info a parameter?
-        let task_info = TaskInfo::from_body(body);
-        let maybe_synced_tasks = maybe_synced_tasks(tcx, body, &task_info);
+    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>, task_info: &'a TaskInfo, maybe_synced_tasks: &'a MaybeSyncedTasks) -> Self {
         MaybeInitializedPlaces {
             tcx,
             body,
@@ -173,7 +169,7 @@ impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
             skip_unreachable_unwind: false,
             task_info,
             maybe_synced_tasks,
-            state_at_last_locations: rustc_data_structures::fx::FxHashMap::default(),
+            state_at_last_locations: FxHashMap::default(),
         }
     }
 
@@ -255,17 +251,16 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
 
     mark_inactive_variants_as_uninit: bool,
     include_inactive_in_otherwise: bool,
-    skip_unreachable_unwind: DenseBitSet<mir::BasicBlock>,
-    /// See [MaybeInitializedPlaces::task_tree].
-    task_tree: TaskTree,
-    /// See [MaybeInitializedPlaces::state_at_last_locations]
+    /// See [MaybeInitializedPlaces::task_info].
+    task_info: TaskInfo,
+    definitely_synced_tasks: DefinitelySyncedTasks,
+    /// See [MaybeInitializedPlaces::state_at_last_locations].
     state_at_last_locations:
         rustc_data_structures::fx::FxHashMap<Location, ChunkedBitSet<MovePathIndex>>,
 }
 
 impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
-    // FIXME(jhilton): non-trivial work in constructor :(
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
+    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>, task_info: &'a TaskInfo, definitely_synced_tasks: &'a DefinitelySyncedTasks,) -> Self {
         MaybeUninitializedPlaces {
             tcx,
             body,
@@ -273,7 +268,8 @@ impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
             mark_inactive_variants_as_uninit: false,
             include_inactive_in_otherwise: false,
             skip_unreachable_unwind: DenseBitSet::new_empty(body.basic_blocks.len()),
-            task_tree: TaskTree::from_body(body),
+            task_info,
+            definitely_synced_tasks,
             state_at_last_locations: rustc_data_structures::fx::FxHashMap::default(),
         }
     }
@@ -596,11 +592,15 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
         if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
             self.state_at_last_locations.insert(location, trans.clone());
         } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
-            let task = self.task_tree.expect_task(location);
-            // See the comment in `MaybeInitializedPlaces::terminator_effect` for why we skip locations that have no state.
-            self.task_tree
-                .descendant_last_locations(task)
-                .filter_map(|location| self.state_at_last_locations.get(&location))
+            let synced_tasks = self.definitely_synced_tasks.synced_tasks_at(&location);
+            synced_tasks
+                .iter()
+                .map(|&task| self.task_info.expect_last_location(task))
+                .map(|last_location| {
+                    self.state_at_last_locations
+                        .get(&last_location)
+                        .expect("expected last location to have known state!")
+                })
                 .for_each(|state| {
                     use crate::lattice::MeetSemiLattice;
                     // Bottom is all-initialized and top is all-uninitialized, so we want to use meet to go lower in the lattice.
