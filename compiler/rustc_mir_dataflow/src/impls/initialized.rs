@@ -256,8 +256,7 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
     task_info: TaskInfo,
     definitely_synced_tasks: DefinitelySyncedTasks,
     /// See [MaybeInitializedPlaces::state_at_last_locations].
-    state_at_last_locations:
-        rustc_data_structures::fx::FxHashMap<Location, ChunkedBitSet<MovePathIndex>>,
+    state_at_last_locations: FxHashMap<Location, ChunkedBitSet<MovePathIndex>>,
 }
 
 impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
@@ -271,7 +270,7 @@ impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
             skip_unreachable_unwind: DenseBitSet::new_empty(body.basic_blocks.len()),
             task_info,
             definitely_synced_tasks,
-            state_at_last_locations: rustc_data_structures::fx::FxHashMap::default(),
+            state_at_last_locations: FxHashMap::default(),
         }
     }
 
@@ -388,6 +387,19 @@ impl<'tcx> MaybeUninitializedPlaces<'_, 'tcx> {
         }
     }
 }
+/// Find the last states of each task in `synced_tasks`.
+///
+/// Panics if any task in `synced_tasks` is not present in `task_info` or is the root task,
+/// as well as if any last location of a task in `synced_tasks` is not in `state_at_last_locations`.
+fn synced_task_last_states<'a, State>(
+    synced_tasks: impl Iterator<Item = Task> + 'a,
+    task_info: &'a TaskInfo,
+    state_at_last_locations: &'a FxHashMap<Location, State>,
+) -> impl Iterator<Item = &'a State> + 'a {
+    synced_tasks.map(|task| task_info.expect_last_location(task)).map(|last_location| {
+        state_at_last_locations.get(&last_location).expect("expected location to have saved state!")
+    })
+}
 
 impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
     /// There can be many more `MovePathIndex` than there are locals in a MIR body.
@@ -469,21 +481,17 @@ impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
         } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
             // Grab the state at all last locations we could be syncing based on the current basic block.
             let synced_tasks = self.maybe_synced_tasks.synced_tasks_at(&location);
-            synced_tasks
-                .iter()
-                .map(|task| self.task_info.expect_last_location(*task))
-                .map(|last_location| {
-                    self.state_at_last_locations
-                        .get(&last_location)
-                        .cloned()
-                        .expect("expected location to have saved state!")
-                })
-                .for_each(|state_at_last_location| {
-                    // Bottom is uninitialized and top is initialized, and we want to become more initialized, so we go up.
-                    // This makes sense because as we go 'up' in the lattice, we consider more of the state to be initialized.
-                    // `join` provides least-upper-bound and we want the state to become "more initialized" upon a sync.
-                    state.join(&state_at_last_location);
-                });
+            synced_task_last_states(
+                synced_tasks.iter().copied(),
+                &self.task_info,
+                &self.state_at_last_locations,
+            )
+            .for_each(|state_at_last_location| {
+                // Bottom is uninitialized and top is initialized, and we want to become more initialized, so we go up.
+                // This makes sense because as we go 'up' in the lattice, we consider more of the state to be initialized.
+                // `join` provides least-upper-bound and we want the state to become "more initialized" upon a sync.
+                state.join(&state_at_last_location);
+            });
         }
 
         edges
@@ -600,19 +608,16 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
             self.state_at_last_locations.insert(location, trans.clone());
         } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
             let synced_tasks = self.definitely_synced_tasks.synced_tasks_at(&location);
-            synced_tasks
-                .iter()
-                .map(|&task| self.task_info.expect_last_location(task))
-                .map(|last_location| {
-                    self.state_at_last_locations
-                        .get(&last_location)
-                        .expect("expected last location to have known state!")
-                })
-                .for_each(|state| {
-                    use crate::lattice::MeetSemiLattice;
-                    // Bottom is all-initialized and top is all-uninitialized, so we want to use meet to go lower in the lattice.
-                    trans.meet(state);
-                });
+            synced_task_last_states(
+                synced_tasks.iter().copied(),
+                &self.task_info,
+                &self.state_at_last_locations,
+            )
+            .for_each(|state| {
+                use crate::lattice::MeetSemiLattice;
+                // Bottom is all-initialized and top is all-uninitialized, so we want to use meet to go lower in the lattice.
+                trans.meet(state);
+            });
         }
 
         if self.skip_unreachable_unwind.contains(location.block) {
@@ -754,21 +759,17 @@ impl<'tcx> Analysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
             self.state_at_last_locations.insert(location, trans.clone());
         } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
             let synced_tasks = self.maybe_synced_tasks.synced_tasks_at(&location);
-            // We want to say that a state is definitely initialized if it is definitely initialized in some synced child.
             // A state is ever initialized if it is ever initialized in some synced child.
-            synced_tasks
-                .iter()
-                .map(|task| self.task_info.expect_last_location(*task))
-                .map(|last_location| {
-                    self.state_at_last_locations
-                        .get(&last_location)
-                        .expect("expected last location to have already been visited!")
-                })
-                .for_each(|state| {
-                    // This lattice has all-uninitialized as the bottom and the join operator adds
-                    // initialized places, so we use join here.
-                    trans.join(&state);
-                });
+            synced_task_last_states(
+                synced_tasks.iter().copied(),
+                &self.task_info,
+                &self.state_at_last_locations,
+            )
+            .for_each(|state| {
+                // This lattice has all-uninitialized as the bottom and the join operator adds
+                // initialized places, so we use join here.
+                trans.join(&state);
+            });
         }
         terminator.edges()
     }
