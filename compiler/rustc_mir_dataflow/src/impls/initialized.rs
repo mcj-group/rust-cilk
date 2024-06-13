@@ -14,9 +14,11 @@ use tracing::{debug, instrument};
 use crate::drop_flag_effects::{DropFlagState, InactiveVariants};
 use crate::mark_cilk_tasks::TaskTree;
 
+use crate::drop_flag_effects_for_function_entry;
 use crate::elaborate_drops::DropFlagState;
 use crate::framework::SwitchIntEdgeEffects;
 use crate::mark_cilk_tasks::TaskTree;
+use crate::task_info::TaskInfo;
 use crate::move_paths::{HasMoveData, InitIndex, InitKind, LookupResult, MoveData, MovePathIndex};
 use crate::{
     Analysis, GenKill, MaybeReachable, drop_flag_effects, drop_flag_effects_for_function_entry,
