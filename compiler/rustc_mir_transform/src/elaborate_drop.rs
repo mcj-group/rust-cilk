@@ -750,6 +750,7 @@ where
                     kind: TerminatorKind::Unreachable,
                 }),
                 self.unwind.is_cleanup(),
+                false,
             ));
         }
 
@@ -943,6 +944,7 @@ where
                 },
             }),
             unwind.is_cleanup(),
+            false,
         );
         let switch_block = self.elaborator.patch().new_block(switch_block);
         self.drop_flag_test_block(switch_block, succ, unwind)
@@ -987,6 +989,7 @@ where
                 source_info: self.source_info,
             }),
             unwind.is_cleanup(),
+            false,
         );
 
         self.elaborator.patch().new_block(result)
@@ -1056,6 +1059,7 @@ where
                 kind: TerminatorKind::Unreachable,
             }),
             unwind.is_cleanup(),
+            false,
         );
         let drop_block = self.elaborator.patch().new_block(drop_block);
 
@@ -1069,6 +1073,7 @@ where
                 kind: TerminatorKind::if_(move_(can_go), succ, drop_block),
             }),
             unwind.is_cleanup(),
+            false,
         );
         let loop_block = self.elaborator.patch().new_block(loop_block);
 
@@ -1254,6 +1259,7 @@ where
                 kind: TerminatorKind::Goto { target: loop_block },
             }),
             unwind.is_cleanup(),
+            false,
         );
 
         let drop_block = self.elaborator.patch().new_block(block);
@@ -1428,6 +1434,7 @@ where
         self.elaborator.patch().new_block(BasicBlockData::new(
             Some(Terminator { source_info: self.source_info, kind: k }),
             unwind.is_cleanup(),
+            false
         ))
     }
 
@@ -1441,6 +1448,7 @@ where
             statements,
             Some(Terminator { source_info: self.source_info, kind: k }),
             unwind.is_cleanup(),
+            false
         ))
     }
 

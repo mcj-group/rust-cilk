@@ -357,6 +357,9 @@ pub enum ExprKind<'tcx> {
     /// A `loop` expression.
     Loop {
         body: ExprId,
+        /// Whether to use the Tapir loop spawning strategy for this loop. Only true
+        /// when this loop originated from a `cilk_for`.
+        tapir_loop_spawn: bool,
     },
     /// A `#[loop_match] loop { state = 'blk: { match state { ... } } }` expression.
     LoopMatch {

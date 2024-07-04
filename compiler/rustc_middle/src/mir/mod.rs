@@ -1310,23 +1310,30 @@ pub struct BasicBlockData<'tcx> {
     /// generated (particularly for MSVC cleanup). Unwind blocks must
     /// only branch to other unwind blocks.
     pub is_cleanup: bool,
+
+    /// If true, this block is the loop header of a parallel loop. This
+    /// is used during codegen to provide appropriate attributes for
+    /// efficient Tapir parallel loops.
+    pub is_parallel_loop_header: bool,
 }
 
 impl<'tcx> BasicBlockData<'tcx> {
     pub fn new(terminator: Option<Terminator<'tcx>>, is_cleanup: bool) -> BasicBlockData<'tcx> {
-        BasicBlockData::new_stmts(Vec::new(), terminator, is_cleanup)
+        BasicBlockData::new_stmts(Vec::new(), terminator, is_cleanup, false)
     }
 
     pub fn new_stmts(
         statements: Vec<Statement<'tcx>>,
         terminator: Option<Terminator<'tcx>>,
         is_cleanup: bool,
+        is_parallel_loop_header: bool
     ) -> BasicBlockData<'tcx> {
         BasicBlockData {
             statements,
             after_last_stmt_debuginfos: StmtDebugInfos::default(),
             terminator,
             is_cleanup,
+            is_parallel_loop_header,
         }
     }
 

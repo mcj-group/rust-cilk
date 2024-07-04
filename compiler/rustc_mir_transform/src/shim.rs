@@ -521,6 +521,7 @@ fn build_thread_local_shim<'tcx>(
         )],
         Some(Terminator { source_info, kind: TerminatorKind::Return }),
         false,
+        false,
     )]);
 
     new_body(
@@ -609,6 +610,7 @@ impl<'tcx> CloneShimBuilder<'tcx> {
             statements,
             Some(Terminator { source_info, kind }),
             is_cleanup,
+            false,
         ))
     }
 
@@ -956,6 +958,7 @@ fn build_call_shim<'tcx>(
             statements,
             Some(Terminator { source_info, kind }),
             is_cleanup,
+            false,
         ))
     };
 
@@ -1084,6 +1087,7 @@ pub(super) fn build_adt_ctor(tcx: TyCtxt<'_>, ctor_id: DefId) -> Body<'_> {
         vec![statement],
         Some(Terminator { source_info, kind: TerminatorKind::Return }),
         false,
+        false,
     );
 
     let source = MirSource::item(ctor_id);
@@ -1134,6 +1138,7 @@ fn build_fn_ptr_addr_shim<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId, self_ty: Ty<'t
     let start_block = BasicBlockData::new_stmts(
         statements,
         Some(Terminator { source_info, kind: TerminatorKind::Return }),
+        false,
         false,
     );
     let source = MirSource::from_instance(ty::InstanceKind::FnPtrAddrShim(def_id, self_ty));
@@ -1234,6 +1239,7 @@ fn build_construct_coroutine_by_move_shim<'tcx>(
     let start_block = BasicBlockData::new_stmts(
         statements,
         Some(Terminator { source_info, kind: TerminatorKind::Return }),
+        false,
         false,
     );
 

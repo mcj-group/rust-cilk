@@ -261,6 +261,7 @@ impl<'tcx> TransformVisitor<'tcx> {
             statements,
             Some(Terminator { source_info, kind: TerminatorKind::Return }),
             false,
+            false,
         ));
 
         block
@@ -1099,6 +1100,7 @@ fn insert_switch<'tcx>(
             vec![assign],
             Some(Terminator { source_info, kind: switch }),
             false,
+            false,
         ),
     );
 
@@ -1133,6 +1135,7 @@ fn insert_poll_ready_block<'tcx>(tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) -> Ba
     body.basic_blocks_mut().push(BasicBlockData::new_stmts(
         [return_poll_ready_assign(tcx, source_info)].to_vec(),
         Some(Terminator { source_info, kind: TerminatorKind::Return }),
+        false,
         false,
     ))
 }
@@ -1227,6 +1230,7 @@ fn generate_poison_block_and_redirect_unwinds_there<'tcx>(
         vec![transform.set_discr(VariantIdx::new(CoroutineArgs::POISONED), source_info)],
         Some(Terminator { source_info, kind: TerminatorKind::UnwindResume }),
         true,
+        false,
     ));
 
     for (idx, block) in body.basic_blocks_mut().iter_enumerated_mut() {
@@ -1384,6 +1388,7 @@ fn create_cases<'tcx>(
                 let block = body.basic_blocks_mut().push(BasicBlockData::new_stmts(
                     statements,
                     Some(Terminator { source_info, kind: TerminatorKind::Goto { target } }),
+                    false,
                     false,
                 ));
 
