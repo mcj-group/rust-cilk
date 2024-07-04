@@ -1847,7 +1847,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let match_expr = {
             let iter = self.expr_ident(head_span, iter, iter_pat_nid);
             let next_expr = match loop_kind {
-                ForLoopKind::For => {
+                // FIXME(jhilton): should do a smarter lowering instead. See similar
+                // comment elsewhere. I think using next on a range is fine since we're
+                // not spawning the call to next itself.
+                ForLoopKind::For | ForLoopKind::CilkFor => {
                     // `Iterator::next(&mut iter)`
                     let ref_mut_iter = self.expr_mut_addr_of(head_span, iter);
                     self.expr_call_lang_item_fn(
@@ -1886,10 +1889,17 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let loop_block = self.block_all(for_span, arena_vec![self; match_stmt], None);
 
         // `[opt_ident]: loop { ... }`
+        // If we have a cilk_for we want to indicate this in the loop so the header can be
+        // annotated correctly later.
+        let loop_source = if matches!(loop_kind, ForLoopKind::CilkFor) {
+            hir::LoopSource::CilkFor
+        } else {
+            hir::LoopSource::ForLoop
+        };
         let kind = hir::ExprKind::Loop(
             loop_block,
             label,
-            hir::LoopSource::ForLoop,
+            loop_source,
             self.lower_span(for_span.with_hi(head.span.hi())),
         );
         let loop_expr = self.arena.alloc(hir::Expr { hir_id: loop_hir_id, kind, span: for_span });
@@ -1947,6 +1957,17 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     arena_vec![self; iter_arm],
                     hir::MatchSource::ForLoopDesugar,
                 ))
+            }
+            ForLoopKind::CilkFor => {
+                // FIXME(jhilton): this should call something for converting to a random-access iterator
+                // or otherwise semantically check that the expression is a random-access iterator (or
+                // only work on ranges for now).
+                // `::std::iter::IntoIterator::into_iter(<head>)`
+                self.expr_call_lang_item_fn(
+                    head_span,
+                    hir::LangItem::IntoIterIntoIter,
+                    arena_vec![self; head],
+                )
             }
         };
 
