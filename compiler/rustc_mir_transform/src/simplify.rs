@@ -93,6 +93,7 @@ impl<'tcx> crate::MirPass<'tcx> for SimplifyCfg {
         self.name()
     }
 
+    #[instrument(level = "debug", skip_all, fields(name = self.name()))]
     fn run_pass(&self, tcx: TyCtxt<'tcx>, body: &mut Body<'tcx>) {
         debug!("SimplifyCfg({:?}) - simplifying {:?}", self.name(), body.source);
         simplify_cfg(tcx, body);
@@ -159,9 +160,42 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
                 let mut terminator =
                     self.basic_blocks[bb].terminator.take().expect("invalid terminator state");
 
-                terminator.successors_mut(|successor| {
+                debug!("terminator of {:?} = {:?}", bb, terminator.kind);
+
+                for successor in terminator.successors_mut() {
+                    let old_successor = *successor;
                     self.collapse_goto_chain(successor, &mut changed);
-                });
+                    debug!(
+                        "successor before and after collapse: {:?} and {:?}",
+                        old_successor, successor
+                    );
+
+                    // If the old successor was a parallel loop header
+                    // and has no more predecessors we should say that
+                    // the new successor is a parallel loop header.
+                    // This seems correct since whenever there's a goto chain
+                    // from the old successor to the new successor, the successor
+                    // changes. Then, it must be equivalent to jump to any point in
+                    // the goto chain or to jump to the beginning.
+                    // Therefore if the old
+                    // successor is a parallel loop header the new successor should
+                    // be as well.
+                    // NOTE(jhilton): we shouldn't actually need the condition that
+                    // self.pred_count[old_successor] == 0 since we should instead observe
+                    // that all calls to collapse_goto_chain behave similarly on the same
+                    // initial successor.
+
+                    let should_make_successor_parallel_loop_header = *successor != old_successor
+                        && self.pred_count[old_successor] == 0
+                        && self.basic_blocks[old_successor].is_parallel_loop_header;
+                    if should_make_successor_parallel_loop_header {
+                        debug!(
+                            "making {:?} a new parallel loop header from {:?}",
+                            *successor, old_successor
+                        );
+                        self.basic_blocks[*successor].is_parallel_loop_header = true;
+                    }
+                }
 
                 let mut inner_changed = true;
                 merged_blocks.clear();
@@ -172,6 +206,7 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
                     changed |= inner_changed;
                 }
 
+                debug!(?merged_blocks);
                 let statements_to_merge =
                     merged_blocks.iter().map(|&i| self.basic_blocks[i].statements.len()).sum();
 
@@ -209,6 +244,7 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
     /// * the block has statements
     /// * the block has a terminator other than `goto`
     /// * the block has no terminator (meaning some other part of the current optimization stole it)
+    #[instrument(level = "debug", skip(self))]
     fn take_terminator_if_simple_goto(&mut self, bb: BasicBlock) -> Option<Terminator<'tcx>> {
         match self.basic_blocks[bb] {
             BasicBlockData {
@@ -224,6 +260,7 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
     }
 
     /// Collapse a goto chain starting from `start`
+    #[instrument(level = "debug", skip(self))]
     fn collapse_goto_chain(&mut self, start: &mut BasicBlock, changed: &mut bool) {
         // Using `SmallVec` here, because in some logs on libcore oli-obk saw many single-element
         // goto chains. We should probably benchmark different sizes.
@@ -237,6 +274,7 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
                 unreachable!();
             };
             trivial_goto_chain &= self.pred_count[target] == 1;
+            debug!("found {:?} with terminator {:?}", current, terminator.kind);
             terminators.push((current, terminator));
             current = target;
         }
@@ -276,6 +314,7 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
     }
 
     // merge a block with 1 `goto` predecessor to its parent
+    #[instrument(level = "debug", skip_all)]
     fn merge_successor(
         &mut self,
         merged_blocks: &mut Vec<BasicBlock>,
