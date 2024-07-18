@@ -962,13 +962,13 @@ unsafe extern "C" {
         Metadata: &'a Metadata,
     );
     pub(crate) safe fn LLVMValueAsMetadata(Node: &Value) -> &Metadata;
-    pub fn LLVMRustMDGetTemporary(C: &Context) -> &mut Metadata;
-    pub fn LLVMRustMDDeleteTemporary(Metadata: &mut Metadata);
+    pub(crate) fn LLVMRustMDGetTemporary(C: &Context) -> &mut Metadata;
+    pub(crate) fn LLVMRustMDDeleteTemporary(Metadata: &mut Metadata);
     /// SAFETY: there should exist exactly one reference to the value passed as [Metadata],
     /// unless a self-reference is being created, in which case [NewMetadata] may be equal to
     /// [Metadata].
     /// We can't use an exclusive borrow to model this constraint.
-    pub fn LLVMRustReplaceMDOperandWith<'a>(
+    pub(crate) fn LLVMRustReplaceMDOperandWith<'a>(
         Metadata: &'a Metadata,
         Index: size_t,
         NewMetadata: &'a Metadata,

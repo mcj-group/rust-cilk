@@ -3,6 +3,7 @@
 use std::ffi::{CStr, CString};
 use std::num::NonZero;
 use std::ptr;
+use std::ops::Deref;
 use std::string::FromUtf8Error;
 
 use libc::c_uint;
@@ -466,4 +467,39 @@ pub(crate) fn add_alias<'ll>(
     name: &CStr,
 ) -> &'ll Value {
     unsafe { LLVMAddAlias2(module, ty, address_space.0, aliasee, name.as_ptr()) }
+}
+pub struct TemporaryMetadataNode<'a> {
+    raw: core::ptr::NonNull<Metadata>,
+    phantom: core::marker::PhantomData<&'a mut Metadata>,
+}
+
+impl<'a> TemporaryMetadataNode<'a> {
+    pub fn new(llcx: &'a Context) -> Self {
+        let temp = unsafe { ffi::LLVMRustMDGetTemporary(llcx) };
+        Self { raw: temp.into(), phantom: core::marker::PhantomData }
+    }
+}
+
+impl Deref for TemporaryMetadataNode<'_> {
+    type Target = Metadata;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.raw.as_ref() }
+    }
+}
+
+impl DerefMut for TemporaryMetadataNode<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { self.raw.as_mut() }
+    }
+}
+
+impl Drop for TemporaryMetadataNode<'_> {
+    fn drop(&mut self) {
+        // SAFETY: raw originated from LLVMRustMDGetTemporary so it should be aligned.
+        // Should also be dereferencable, initialized, and non-aliasing since we don't
+        // expose raw outside the module..
+        let raw = unsafe { self.raw.as_mut() };
+        unsafe { ffi::LLVMRustMDDeleteTemporary(raw) }
+    }
 }
