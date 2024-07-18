@@ -1505,7 +1505,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 } else {
                     AddParallelLoopMetadata::False
                 };
-                // NOTE(jhilton): we attach the metadata to the parallel loop header.
+                // NOTE(jhilton): we attach the metadata to the parallel loop back edge.
                 helper.funclet_br_maybe_add_metadata(
                     self,
                     bx,
