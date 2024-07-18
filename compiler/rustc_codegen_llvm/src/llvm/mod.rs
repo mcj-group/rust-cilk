@@ -488,12 +488,6 @@ impl Deref for TemporaryMetadataNode<'_> {
     }
 }
 
-impl DerefMut for TemporaryMetadataNode<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { self.raw.as_mut() }
-    }
-}
-
 impl Drop for TemporaryMetadataNode<'_> {
     fn drop(&mut self) {
         // SAFETY: raw originated from LLVMRustMDGetTemporary so it should be aligned.
