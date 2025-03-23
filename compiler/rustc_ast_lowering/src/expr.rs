@@ -995,7 +995,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         body: &Expr,
         fn_decl_span: Span,
         fn_arg_span: Span,
-    ) -> &mut rustc_hir::Closure<'hir> {
+    ) -> &mut hir::Expr<'hir> {
         let (binder_clause, generic_params) = self.lower_closure_binder(binder);
 
         let (body_id, closure_kind) = self.with_new_scopes(fn_decl_span, move |this| {
@@ -1027,7 +1027,11 @@ impl<'hir> LoweringContext<'_, 'hir> {
             constness: self.lower_constness(constness),
         });
 
-        c
+        &mut rustc_hir::Expr {
+            hir_id: self.next_id(),
+            kind: rustc_hir::ExprKind::Closure(c),
+            span: fn_decl_span,
+        }
     }
 
     fn closure_movability_for_fn(
@@ -1662,11 +1666,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     // TODO: could I spit out some values for compilation of a real closure? Get it to spit out details for a microbenchmark with a real closure wrapping a cilk spawn, then copy it here
                     &ClosureBinder::NotPresent, // idk
                     CaptureBy::Value { move_kw: pat_span }, // idk
-                    self.local_def_id(body_block), // idk, but check the stuff I did on Send/Sync
-                    Constness::NotConst, // idk
+                    e.id, // idk, but check the stuff I did on Send/Sync
+                    Const::No, // idk
                     Movability::Static, // idk
-                    &FnDecl{ inputs: thin_vec![], output: Default(Span)}, 
-                    // TODO: fix Default(Span), look at compiler/rustc_ast/src/ast.rs pub enum FnRetTy::Default(Span)
+                    &FnDecl{ inputs: thin_vec![], output: FnRetTy::Default(pat_span)}, // TODO: is this the right span?
                     self.expr_spawn_block(body_block),
                     pat_span, // idk
                     pat_span // idk
