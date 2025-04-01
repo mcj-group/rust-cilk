@@ -199,6 +199,7 @@ pub enum AttributeKind {
     AllocAlign = 39,
     SanitizeSafeStack = 40,
     FnRetThunkExtern = 41,
+    Orphaning = 42,
 }
 
 /// LLVMIntPredicate
