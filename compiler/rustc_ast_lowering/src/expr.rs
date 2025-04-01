@@ -984,55 +984,55 @@ impl<'hir> LoweringContext<'_, 'hir> {
         hir::ExprKind::Closure(c)
     }
 
-    fn lower_expr_closure_2(
-        &mut self,
-        binder: &ClosureBinder,
-        capture_clause: CaptureBy,
-        closure_id: NodeId,
-        constness: Const,
-        movability: Movability,
-        decl: &FnDecl,
-        body: hir::Expr<'hir>,
-        fn_decl_span: Span,
-        fn_arg_span: Span,
-    ) -> hir::Expr<'hir> {
-        let (binder_clause, generic_params) = self.lower_closure_binder(binder);
+    // fn lower_expr_closure_2(
+    //     &mut self,
+    //     binder: &ClosureBinder,
+    //     capture_clause: CaptureBy,
+    //     closure_id: NodeId,
+    //     constness: Const,
+    //     movability: Movability,
+    //     decl: &FnDecl,
+    //     body: hir::Expr<'hir>,
+    //     fn_decl_span: Span,
+    //     fn_arg_span: Span,
+    // ) -> hir::Expr<'hir> {
+    //     let (binder_clause, generic_params) = self.lower_closure_binder(binder);
 
-        let (body_id, closure_kind) = self.with_new_scopes(fn_decl_span, move |this| {
-            let mut coroutine_kind = None;
-            let body_id = this.lower_fn_body(decl, |this| {
-                let e = body;
-                coroutine_kind = this.coroutine_kind;
-                e
-            });
-            let coroutine_option =
-                this.closure_movability_for_fn(decl, fn_decl_span, coroutine_kind, movability);
-            (body_id, coroutine_option)
-        });
+    //     let (body_id, closure_kind) = self.with_new_scopes(fn_decl_span, move |this| {
+    //         let mut coroutine_kind = None;
+    //         let body_id = this.lower_fn_body(decl, |this| {
+    //             let e = body;
+    //             coroutine_kind = this.coroutine_kind;
+    //             e
+    //         });
+    //         let coroutine_option =
+    //             this.closure_movability_for_fn(decl, fn_decl_span, coroutine_kind, movability);
+    //         (body_id, coroutine_option)
+    //     });
 
-        let bound_generic_params = self.lower_lifetime_binder(closure_id, generic_params);
-        // Lower outside new scope to preserve `is_in_loop_condition`.
-        let fn_decl = self.lower_fn_decl(decl, closure_id, fn_decl_span, FnDeclKind::Closure, None);
+    //     let bound_generic_params = self.lower_lifetime_binder(closure_id, generic_params);
+    //     // Lower outside new scope to preserve `is_in_loop_condition`.
+    //     let fn_decl = self.lower_fn_decl(decl, closure_id, fn_decl_span, FnDeclKind::Closure, None);
 
-        let c: &mut rustc_hir::Closure<'_> = self.arena.alloc(hir::Closure {
-            def_id: self.local_def_id(closure_id),
-            binder: binder_clause,
-            capture_clause,
-            bound_generic_params,
-            fn_decl,
-            body: body_id,
-            fn_decl_span: self.lower_span(fn_decl_span),
-            fn_arg_span: Some(self.lower_span(fn_arg_span)),
-            kind: closure_kind,
-            constness: self.lower_constness(constness),
-        });
+    //     let c: &mut rustc_hir::Closure<'_> = self.arena.alloc(hir::Closure {
+    //         def_id: self.local_def_id(closure_id),
+    //         binder: binder_clause,
+    //         capture_clause,
+    //         bound_generic_params,
+    //         fn_decl,
+    //         body: body_id,
+    //         fn_decl_span: self.lower_span(fn_decl_span),
+    //         fn_arg_span: Some(self.lower_span(fn_arg_span)),
+    //         kind: closure_kind,
+    //         constness: self.lower_constness(constness),
+    //     });
 
-        rustc_hir::Expr {
-            hir_id: self.next_id(),
-            kind: rustc_hir::ExprKind::Closure(c),
-            span: fn_decl_span,
-        }
-    }
+    //     rustc_hir::Expr {
+    //         hir_id: self.next_id(),
+    //         kind: rustc_hir::ExprKind::Closure(c),
+    //         span: fn_decl_span,
+    //     }
+    // }
 
     fn closure_movability_for_fn(
         &mut self,
@@ -1660,24 +1660,24 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let some_arm = {
             let some_pat = self.pat_some(pat_span, pat);
             let body_block = self.with_loop_scope(e.id, |this| this.lower_block(body, false));
-            let body_block2 = self.arena.alloc(self.expr_block(body_block));
-            let body_block3 = self.expr(body_block.span, hir::ExprKind::CilkSpawn(body_block2));
+            // let body_block2 = self.arena.alloc(self.expr_block(body_block));
+            // let body_block3 = self.expr(body_block.span, hir::ExprKind::CilkSpawn(body_block2));
             
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
-                // self.arena.alloc(self.expr_spawn_block(body_block))
-                self.arena.alloc(
-                    self.lower_expr_closure_2( 
-                        // TODO: could I spit out some values for compilation of a real closure? Get it to spit out details for a microbenchmark with a real closure wrapping a cilk spawn, then copy it here
-                        &ClosureBinder::NotPresent, // idk
-                        CaptureBy::Value { move_kw: pat_span }, // idk
-                        e.id, // idk, but check the stuff I did on Send/Sync
-                        Const::No, // idk
-                        Movability::Static, // idk
-                        &FnDecl{ inputs: thin_vec![], output: FnRetTy::Default(pat_span)}, // TODO: is this the right span?
-                        body_block3,
-                        pat_span, // idk
-                        pat_span // idk
-                ))
+                self.arena.alloc(self.expr_spawn_block(body_block))
+                // self.arena.alloc(
+                //     self.lower_expr_closure_2( 
+                //         // TODO: could I spit out some values for compilation of a real closure? Get it to spit out details for a microbenchmark with a real closure wrapping a cilk spawn, then copy it here
+                //         &ClosureBinder::NotPresent, // idk
+                //         CaptureBy::Value { move_kw: pat_span }, // idk
+                //         e.id, // idk, but check the stuff I did on Send/Sync
+                //         Const::No, // idk
+                //         Movability::Static, // idk
+                //         &FnDecl{ inputs: thin_vec![], output: FnRetTy::Default(pat_span)}, // TODO: is this the right span?
+                //         body_block3,
+                //         pat_span, // idk
+                //         pat_span // idk
+                // ))
             } else {
                 self.arena.alloc(self.expr_block(body_block))
             };
@@ -2147,7 +2147,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
     pub(super) fn expr_block(&mut self, b: &'hir hir::Block<'hir>) -> hir::Expr<'hir> {
         self.expr(b.span, hir::ExprKind::Block(b, None))
     }
-    #[allow(dead_code)]
+
     fn expr_spawn_block(&mut self, b: &'hir hir::Block<'hir>) -> hir::Expr<'hir> {
         let block = self.arena.alloc(self.expr_block(b));
         self.expr(b.span, hir::ExprKind::CilkSpawn(block))
