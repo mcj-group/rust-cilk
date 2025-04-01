@@ -1427,6 +1427,7 @@ symbols! {
         or,
         or_patterns,
         ord_cmp_method,
+        orphaning,
         other,
         out,
         output,

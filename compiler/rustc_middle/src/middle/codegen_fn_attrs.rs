@@ -6,6 +6,7 @@ use rustc_hir::def_id::DefId;
 use rustc_macros::{HashStable, TyDecodable, TyEncodable};
 use rustc_span::Symbol;
 use rustc_target::spec::SanitizerSet;
+use rustc_attr::{InlineAttr, OrphaningAttr, InstructionSetAttr, OptimizeAttr};
 
 use crate::mir::mono::Visibility;
 use crate::ty::{InstanceKind, TyCtxt};
@@ -62,6 +63,8 @@ pub struct CodegenFnAttrs {
     pub flags: CodegenFnAttrFlags,
     /// Parsed representation of the `#[inline]` attribute
     pub inline: InlineAttr,
+    /// Parsed representation of the `#[orphaning]` attribute
+    pub orphaning: OrphaningAttr,
     /// Parsed representation of the `#[optimize]` attribute
     pub optimize: OptimizeAttr,
     /// The name this function will be imported/exported under. This can be set
@@ -223,6 +226,7 @@ impl CodegenFnAttrs {
             inline: InlineAttr::None,
             optimize: OptimizeAttr::Default,
             symbol_name: None,
+            orphaning: OrphaningAttr::None,
             link_ordinal: None,
             target_features: vec![],
             foreign_item_symbol_aliases: vec![],

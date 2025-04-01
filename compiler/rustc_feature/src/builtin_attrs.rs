@@ -749,6 +749,11 @@ pub static BUILTIN_ATTRIBUTES: &[BuiltinAttribute] = &[
         FutureWarnFollowing, EncodeCrossCrate::No
     ),
     ungated!(
+        orphaning, Normal,
+        template!(Word, "https://doc.rust-lang.org/reference/attributes/codegen.html#the-cold-attribute"),
+        FutureWarnFollowing, EncodeCrossCrate::No
+    ),
+    ungated!(
         cold, Normal,
         template!(Word, "https://doc.rust-lang.org/reference/attributes/codegen.html#the-cold-attribute"),
         WarnFollowing, EncodeCrossCrate::No

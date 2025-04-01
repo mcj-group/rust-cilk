@@ -6,6 +6,7 @@ use rustc_ast::{LitKind, MetaItem, MetaItemInner};
 use rustc_hir::attrs::{
     AttributeKind, EiiImplResolution, InlineAttr, Linkage, RtsanSetting, UsedBy,
 };
+use rustc_attr::{list_contains_name, InlineAttr, OrphaningAttr, InstructionSetAttr, OptimizeAttr};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE, LocalDefId};
 use rustc_hir::{self as hir, Attribute, find_attr};
@@ -326,6 +327,16 @@ fn apply_overrides(tcx: TyCtxt<'_>, did: LocalDefId, codegen_fn_attrs: &mut Code
         codegen_fn_attrs.inline = InlineAttr::Never;
     }
 
+    codegen_fn_attrs.orphaning = attrs.iter().fold(OrphaningAttr::None, |oa, attr| {
+        if !attr.has_name(sym::orphaning) {
+            return oa;
+        }
+        match attr.meta_kind() {
+            Some(MetaItemKind::Word) => OrphaningAttr::Hint,
+            Some(MetaItemKind::List(_)) | Some(MetaItemKind::NameValue(_)) => todo!(),
+            None => oa,
+        }
+    });
     // #73631: closures inherit `#[target_feature]` annotations
     //
     // If this closure is marked `#[inline(always)]`, simply skip adding `#[target_feature]`.

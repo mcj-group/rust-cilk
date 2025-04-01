@@ -18,6 +18,7 @@ use crate::llvm::{
     self, AllocKindFlags, Attribute, AttributeKind, AttributePlace, MemoryEffects, Value,
 };
 use crate::{Session, attributes, llvm_util};
+pub use rustc_attr::{InlineAttr, OrphaningAttr, InstructionSetAttr, OptimizeAttr};
 
 pub(crate) fn apply_to_llfn(llfn: &Value, idx: AttributePlace, attrs: &[&Attribute]) {
     if !attrs.is_empty() {
@@ -100,6 +101,12 @@ fn patchable_function_entry_attrs<'ll>(
         ));
     }
     attrs
+
+fn orphaning_attr<'ll>(cx: &CodegenCx<'ll, '_>, orphaning: OrphaningAttr) -> Option<&'ll Attribute> {
+    match orphaning {
+        OrphaningAttr::Hint => Some(AttributeKind::Orphaning.create_attr(cx.llcx)),
+        OrphaningAttr::None => None,
+    }
 }
 
 /// Get LLVM sanitize attributes.
