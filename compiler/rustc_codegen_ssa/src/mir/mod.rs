@@ -127,6 +127,9 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
     /// call. We might need a more complex data structure than this if the token should ever be reused, but it's
     /// my impression that that isn't the case.
     runtime_hint_stack: SmallVec<[Bx::Value; 1]>,
+
+    /// A stack of values returned from `taskframe_create` for use in their corresponding `taskframe_use` call.
+    taskframe_hint_stack: SmallVec<[Bx::Value; 1]>,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -227,6 +230,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         sync_region: None,
         parallel_back_edges: BitSet::new_empty(mir.basic_blocks.len()),
         runtime_hint_stack: SmallVec::new(),
+        taskframe_hint_stack: SmallVec::new(),
     };
 
     // It may seem like we should iterate over `required_consts` to ensure they all successfully

@@ -279,6 +279,9 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         sync_region: &'ll Value,
     ) {
         unsafe {
+            // %tf = call token %llvm.taskframe.create()
+            // build my own block that calls taskframe.use
+            // use a GoTo terminator to task block
             llvm::LLVMBuildDetach(self.llbuilder, task, continuation, sync_region);
         }
     }

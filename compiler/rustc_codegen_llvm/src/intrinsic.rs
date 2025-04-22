@@ -463,6 +463,15 @@ impl<'ll, 'tcx> IntrinsicCallMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         // This intrinsic should return void anyways.
         self.call_intrinsic("llvm.tapir.runtime.end", &[token]);
     }
+
+    // CAIATHEN(TASK4) is taskframe.use an intrinsic?
+    fn taskframe_create(&mut self) -> &'ll Value {
+        self.call_intrinsic("llvm.taskframe.create", &[])
+    }
+
+    fn taskframe_use(&mut self, token: &'ll Value) {
+        self.call_intrinsic("llvm.taskframe.use", &[token]);
+    }
 }
 
 fn try_intrinsic<'ll>(

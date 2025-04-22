@@ -139,6 +139,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         )
     }
 
+    // could be useful for CAIATHEN(TASK3)
     fn funclet_br_maybe_add_metadata<Bx: BuilderMethods<'a, 'tcx>>(
         &self,
         fx: &mut FunctionCx<'a, 'tcx, Bx>,
@@ -1170,6 +1171,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     pub fn codegen_block(&mut self, mut bb: mir::BasicBlock) {
+        // CAIATHEN(TASK4) I think after a new llbb is made this fn is called, which adds all the insts based off MIR
         let llbb = match self.try_llbb(bb) {
             Some(llbb) => llbb,
             None => return,
@@ -1349,11 +1351,32 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 mergeable_succ(),
             ),
 
+            // CAIATHEN(TASK4)
             // FIXME(jhilton): for backends that don't support Tapir, we can merge successors.
+            // I can't use fn codegen_statement to generate taskframe create and use because they are not in the MIR (should I put them in the MIR?)
             mir::TerminatorKind::Detach { spawned_task, continuation } => {
                 let spawned_task = self.llbb(spawned_task);
                 if Bx::supports_tapir() {
+                    // let orig: &BasicBlock = unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) };
                     let continuation = self.llbb(continuation);
+                    let taskframe_use_block = Bx::append_block(self.cx, self.llfn, "taskframe.use");
+                    
+                    
+                    bx.br(taskframe_use_block); // FIXME
+
+                    // ================= TASKFRAME CREATE =================
+                    let created_token = bx.taskframe_create(); // TODO: move this to the beginning of the closure... I wonder if there is some way to use FunctionCx here to get the first insertion point... will codegen_ssa be late enough to insert things before alloca?
+                    self.taskframe_hint_stack.push(created_token);
+                    
+                    // ================= TASKFRAME USE =================
+                    let token = self
+                        .taskframe_hint_stack
+                        .pop()
+                        .expect("should always hint creating taskframe before using it!");
+                    bx.taskframe_use(token); 
+
+                    // ================= TERMINATOR =================
+                    // bx.detach(spawned_task, continuation, taskframe_use, self.sync_region());
                     bx.detach(spawned_task, continuation, self.sync_region());
                 } else {
                     bx.br(spawned_task);
