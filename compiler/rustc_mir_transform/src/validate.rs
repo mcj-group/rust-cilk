@@ -1554,7 +1554,9 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             }
             // These hints both have no invariants.
             StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStart)
-            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStop) => {}
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStop)
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate)
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse) => {}
             StatementKind::SetDiscriminant { place, .. } => {
                 if self.body.phase < MirPhase::Runtime(RuntimePhase::Initial) {
                     self.fail(location, "`SetDiscriminant`is not allowed until deaggregation");

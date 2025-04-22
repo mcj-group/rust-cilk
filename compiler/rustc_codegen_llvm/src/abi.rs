@@ -406,12 +406,8 @@ impl<'ll, 'tcx> FnAbiLlvmExt<'ll, 'tcx> for FnAbi<'tcx, Ty<'tcx>> {
         to_llvm_calling_convention(cx.tcx.sess, self.conv)
     }
 
-    fn apply_attrs_llfn(
-        &self,
-        cx: &CodegenCx<'ll, 'tcx>,
-        llfn: &'ll Value,
-        instance: Option<ty::Instance<'tcx>>,
-    ) {
+    // CAIATHEN(TASK3)
+    fn apply_attrs_llfn(&self, cx: &CodegenCx<'ll, 'tcx>, llfn: &'ll Value) {
         let mut func_attrs = SmallVec::<[_; 3]>::new();
         if self.ret.layout.is_uninhabited() {
             func_attrs.push(llvm::AttributeKind::NoReturn.create_attr(cx.llcx));
@@ -578,7 +574,7 @@ impl<'ll, 'tcx> FnAbiLlvmExt<'ll, 'tcx> for FnAbi<'tcx, Ty<'tcx>> {
         let mut func_attrs = SmallVec::<[_; 2]>::new();
         if self.ret.layout.is_uninhabited() {
             func_attrs.push(llvm::AttributeKind::NoReturn.create_attr(bx.cx.llcx));
-        }
+        }    // CAIATHEN(TASK3)
         if !self.can_unwind {
             func_attrs.push(llvm::AttributeKind::NoUnwind.create_attr(bx.cx.llcx));
         }

@@ -1,6 +1,7 @@
-use rustc_middle::mir::{self, NonDivergingIntrinsic, StmtDebugInfo};
-use rustc_middle::span_bug;
-use tracing::instrument;
+use rustc_middle::mir;
+use rustc_middle::mir::NonDivergingIntrinsic;
+use rustc_session::config::OptLevel;
+use rustc_middle::mir::StatementKind;
 
 use super::{FunctionCx, LocalRef};
 use crate::traits::*;
@@ -100,7 +101,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         .runtime_hint_stack
                         .pop()
                         .expect("should always hint starting runtime before stopping it!");
-                    bx.tapir_runtime_end(token);
+                    bx.tapir_runtime_end(token); //CAIATHEN(TASK4)
                 }
             }
             mir::StatementKind::FakeRead(..)
@@ -110,6 +111,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             | mir::StatementKind::PlaceMention(..)
             | mir::StatementKind::BackwardIncompatibleDropHint { .. }
             | mir::StatementKind::Nop => {}
+            StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate) | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse) => todo!()
         }
     }
 

@@ -695,10 +695,18 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     );
                 }
             }
-            StatementKind::Intrinsic(box NonDivergingIntrinsic::Assume(..))
-            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStart)
-            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStop)
-            | StatementKind::FakeRead(..)
+            StatementKind::Intrinsic(box kind) => match kind {
+                NonDivergingIntrinsic::Assume(op) => self.check_operand(op, location),
+                NonDivergingIntrinsic::CopyNonOverlapping(..) => span_bug!(
+                    stmt.source_info.span,
+                    "Unexpected NonDivergingIntrinsic::CopyNonOverlapping, should only appear after lowering_intrinsics",
+                ),
+                NonDivergingIntrinsic::TapirRuntimeStart
+                | NonDivergingIntrinsic::TapirRuntimeStop 
+                | NonDivergingIntrinsic::TaskframeCreate 
+                | NonDivergingIntrinsic::TaskframeUse => {}
+            },
+            StatementKind::FakeRead(..)
             | StatementKind::StorageLive(..)
             | StatementKind::StorageDead(..)
             | StatementKind::Retag { .. }

@@ -402,6 +402,8 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
             // Both of these intrinsics store no places.
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStart)
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStop)
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate)
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse)
             | StatementKind::AscribeUserType(..)
             | StatementKind::Coverage(..)
             | StatementKind::FakeRead(..)

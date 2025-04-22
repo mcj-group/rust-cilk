@@ -736,7 +736,15 @@ impl<'a, 'gcc, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'a, 'gcc, 'tc
     }
 
     fn tapir_runtime_stop(&mut self, token: RValue<'gcc>) {
-        unimplemented!()
+        unimplemented!();
+    }
+
+    fn taskframe_create(&mut self) -> RValue<'gcc> {
+        unimplemented!();
+    }
+
+    fn taskframe_use(&mut self, token: RValue<'gcc>) {
+        unimplemented!();
     }
 }
 

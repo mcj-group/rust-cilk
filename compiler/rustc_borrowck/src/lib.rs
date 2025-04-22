@@ -834,7 +834,7 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
                 ),
                 // We expect this before lower_intrinsics (it's emitted directly by MIR lowering)
                 // but the borrow checker doesn't care.
-                NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop => {}
+                NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop | NonDivergingIntrinsic::TaskframeCreate | NonDivergingIntrinsic::TaskframeUse => {}
             }
             // Only relevant for mir typeck
             StatementKind::AscribeUserType(..)
