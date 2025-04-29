@@ -1361,11 +1361,12 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     let continuation = self.llbb(continuation);
                     let taskframe_use_block = Bx::append_block(self.cx, self.llfn, "taskframe.use");
                     
-                    
                     bx.br(taskframe_use_block); // FIXME
 
+                    let bx2 = &mut Bx::build(self.cx, taskframe_use_block);
+
                     // ================= TASKFRAME CREATE =================
-                    let created_token = bx.taskframe_create(); // TODO: move this to the beginning of the closure... I wonder if there is some way to use FunctionCx here to get the first insertion point... will codegen_ssa be late enough to insert things before alloca?
+                    let created_token = bx2.taskframe_create(); // TODO: move this to the beginning of the closure... I wonder if there is some way to use FunctionCx here to get the first insertion point... will codegen_ssa be late enough to insert things before alloca?
                     self.taskframe_hint_stack.push(created_token);
                     
                     // ================= TASKFRAME USE =================
@@ -1373,11 +1374,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         .taskframe_hint_stack
                         .pop()
                         .expect("should always hint creating taskframe before using it!");
-                    bx.taskframe_use(token); 
+                    bx2.taskframe_use(token); 
 
                     // ================= TERMINATOR =================
                     // bx.detach(spawned_task, continuation, taskframe_use, self.sync_region());
-                    bx.detach(spawned_task, continuation, self.sync_region());
+                    bx2.detach(spawned_task, continuation, self.sync_region());
                 } else {
                     bx.br(spawned_task);
                 }
