@@ -1,6 +1,13 @@
-use std::cmp;
+use super::operand::OperandRef;
+use super::operand::OperandValue::{Immediate, Pair, Ref, ZeroSized};
+use super::place::PlaceRef;
+use super::{CachedLlbb, FunctionCx, LocalRef};
 
-use rustc_abi::{Align, BackendRepr, ExternAbi, HasDataLayout, Reg, Size, WrappingRange};
+use crate::base;
+use crate::common::{self, IntPredicate};
+use crate::meth;
+use crate::traits::*;
+use crate::MemFlags;
 use rustc_ast as ast;
 use rustc_ast::{InlineAsmOptions, InlineAsmTemplatePiece};
 use rustc_data_structures::packed::Pu128;
@@ -12,20 +19,11 @@ use rustc_middle::ty::print::{with_no_trimmed_paths, with_no_visible_paths};
 use rustc_middle::ty::{self, Instance, Ty, TypeVisitableExt};
 use rustc_middle::{bug, span_bug};
 use rustc_session::config::OptLevel;
-use rustc_span::Span;
-use rustc_span::source_map::Spanned;
-use rustc_target::callconv::{ArgAbi, ArgAttributes, CastTarget, FnAbi, PassMode};
-use tracing::{debug, info};
-
-use super::operand::OperandRef;
-use super::operand::OperandValue::{Immediate, Pair, Ref, ZeroSized};
-use super::place::{PlaceRef, PlaceValue};
-use super::{CachedLlbb, FunctionCx, LocalRef};
-use crate::base::{self, is_call_from_compiler_builtins_to_upstream_monomorphization};
-use crate::common::{self, IntPredicate};
-use crate::errors::CompilerBuiltinsCannotCall;
-use crate::traits::*;
-use crate::{MemFlags, meth};
+use rustc_span::{source_map::Spanned, sym, Span, Symbol};
+use rustc_target::abi::call::{ArgAbi, FnAbi, PassMode, Reg};
+use rustc_target::abi::{self, HasDataLayout, WrappingRange};
+use rustc_target::spec::abi::Abi;
+use std::cmp;
 
 // Indicates if we are in the middle of merging a BB's successor into it. This
 // can happen when BB jumps directly to its successor and the successor has no
@@ -1640,26 +1638,27 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 if Bx::supports_tapir() {
                     // let orig: &BasicBlock = unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) };
                     let continuation = self.llbb(continuation);
-                    let taskframe_use_block = Bx::append_block(self.cx, self.llfn, "taskframe.use");
-                    
-                    bx.br(taskframe_use_block); // FIXME
 
-                    let bx2 = &mut Bx::build(self.cx, taskframe_use_block);
+                    let spawned_task_bx = &mut Bx::build(self.cx, spawned_task);
 
-                    // ================= TASKFRAME CREATE =================
-                    let created_token = bx2.taskframe_create(); // TODO: move this to the beginning of the closure... I wonder if there is some way to use FunctionCx here to get the first insertion point... will codegen_ssa be late enough to insert things before alloca?
-                    self.taskframe_hint_stack.push(created_token);
+                    // bx.tcx().types.bool
+                    // spawned_task_bx.alloca(fake_ty, spawned_task_bx.layout_of(ty::Float(FloatTy::F32)).layout.align.abi);
+                    // let fake_ty = spawned_task_bx.cx().type_i32();
+                    // spawned_task_bx.alloca(fake_ty, spawned_task_bx.layout_of(spawned_task_bx.tcx().types.i32).layout.align.abi);
                     
-                    // ================= TASKFRAME USE =================
+                    // TODO: TRY THIS
+                    // let scratch = PlaceRef::alloca(bx, self.fn_abi.ret.layout);
+                    
+                    // ================= TASKFRAME USE in spawned_task_bx =================
                     let token = self
                         .taskframe_hint_stack
                         .pop()
                         .expect("should always hint creating taskframe before using it!");
-                    bx2.taskframe_use(token); 
+                    spawned_task_bx.taskframe_use(token); 
 
                     // ================= TERMINATOR =================
                     // bx.detach(spawned_task, continuation, taskframe_use, self.sync_region());
-                    bx2.detach(spawned_task, continuation, self.sync_region());
+                    bx.detach(spawned_task, continuation, self.sync_region());
                 } else {
                     bx.br(spawned_task);
                 }
