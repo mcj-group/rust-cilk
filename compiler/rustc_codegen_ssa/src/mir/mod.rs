@@ -239,6 +239,49 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
     fx.per_local_var_debug_info = fx.compute_per_local_var_debug_info(&mut start_bx);
 
+    // CAIATHEN(TASK4)
+    let uses_cilk_control_flow = || {
+        mir.basic_blocks.iter().any(|bb| {
+            matches!(
+                bb.terminator().kind,
+                mir::TerminatorKind::Detach { .. }
+                    | mir::TerminatorKind::Reattach { .. }
+                    | mir::TerminatorKind::Sync { .. }
+            )
+        })
+    };
+
+    let parallel_back_edges = || {
+        let mut seen = rustc_data_structures::fx::FxHashSet::default();
+        mir::traversal::reverse_postorder(mir).filter_map(move |(bb, bb_data)| {
+            seen.insert(bb);
+            if let mir::TerminatorKind::Goto { target } = bb_data.terminator().kind {
+                // If the target of the jump is a parallel loop header and we've already observed
+                // it, we know this must be a loop back-edge.
+                if mir.basic_blocks[target].is_parallel_loop_header && seen.contains(&target) {
+                    return Some(bb);
+                }
+            }
+            None
+        })
+    };
+
+    if Bx::supports_tapir() && uses_cilk_control_flow() {
+
+        // ================= TASKFRAME CREATE =================
+        let created_token: <Bx as BackendTypes>::Value = start_bx.taskframe_create(); 
+        fx.taskframe_hint_stack.push(created_token);
+        
+        // Add a sync region at the top of the function, so we can use it later.
+        fx.sync_region = Some(start_bx.sync_region_start());
+
+        // Let's figure out the parallel back-edges. These are edges into parallel
+        // loop headers.
+        parallel_back_edges().for_each(|bb| {
+            fx.parallel_back_edges.insert(bb);
+        });
+    }
+
     let memory_locals = analyze::non_ssa_locals(&fx);
 
     // Allocate variable and temp allocas
@@ -279,43 +322,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
     // Apply debuginfo to the newly allocated locals.
     fx.debug_introduce_locals(&mut start_bx);
-
-    let uses_cilk_control_flow = || {
-        mir.basic_blocks.iter().any(|bb| {
-            matches!(
-                bb.terminator().kind,
-                mir::TerminatorKind::Detach { .. }
-                    | mir::TerminatorKind::Reattach { .. }
-                    | mir::TerminatorKind::Sync { .. }
-            )
-        })
-    };
-
-    let parallel_back_edges = || {
-        let mut seen = rustc_data_structures::fx::FxHashSet::default();
-        mir::traversal::reverse_postorder(mir).filter_map(move |(bb, bb_data)| {
-            seen.insert(bb);
-            if let mir::TerminatorKind::Goto { target } = bb_data.terminator().kind {
-                // If the target of the jump is a parallel loop header and we've already observed
-                // it, we know this must be a loop back-edge.
-                if mir.basic_blocks[target].is_parallel_loop_header && seen.contains(&target) {
-                    return Some(bb);
-                }
-            }
-            None
-        })
-    };
-
-    if Bx::supports_tapir() && uses_cilk_control_flow() {
-        // Add a sync region at the top of the function, so we can use it later.
-        fx.sync_region = Some(start_bx.sync_region_start());
-
-        // Let's figure out the parallel back-edges. These are edges into parallel
-        // loop headers.
-        parallel_back_edges().for_each(|bb| {
-            fx.parallel_back_edges.insert(bb);
-        });
-    }
 
     // The builders will be created separately for each basic block at `codegen_block`.
     // So drop the builder of `start_llbb` to avoid having two at the same time.
