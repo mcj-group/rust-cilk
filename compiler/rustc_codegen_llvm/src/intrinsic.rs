@@ -832,6 +832,10 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
     }
 
     fn taskframe_create(&mut self) -> &'ll Value {
+        let thebb = unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) };
+        unsafe {
+            llvm::LLVMRustPositionBuilderAtStart(self.llbuilder, thebb);
+        }
         self.call_intrinsic("llvm.taskframe.create", &[])
     }
 
