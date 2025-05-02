@@ -1360,6 +1360,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
                     let spawned_task_bx = &mut Bx::build(self.cx, spawned_task);
 
+                    // ================= aloca insertion experiments =================
                     // bx.tcx().types.bool
                     // spawned_task_bx.alloca(fake_ty, spawned_task_bx.layout_of(ty::Float(FloatTy::F32)).layout.align.abi);
                     // let fake_ty = spawned_task_bx.cx().type_i32();
@@ -1375,8 +1376,9 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                         .expect("should always hint creating taskframe before using it!");
                     spawned_task_bx.taskframe_use(token); 
 
+                    drop(spawned_task_bx);
+
                     // ================= TERMINATOR =================
-                    // bx.detach(spawned_task, continuation, taskframe_use, self.sync_region());
                     bx.detach(spawned_task, continuation, self.sync_region());
                 } else {
                     bx.br(spawned_task);
