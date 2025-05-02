@@ -1,7 +1,6 @@
 use rustc_middle::mir;
 use rustc_middle::mir::NonDivergingIntrinsic;
 use rustc_session::config::OptLevel;
-use rustc_middle::mir::StatementKind;
 
 use super::{FunctionCx, LocalRef};
 use crate::traits::*;
@@ -111,7 +110,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             | mir::StatementKind::PlaceMention(..)
             | mir::StatementKind::BackwardIncompatibleDropHint { .. }
             | mir::StatementKind::Nop => {}
-            StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate) | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse) => todo!()
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate) | mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse) => todo!()
         }
     }
 

@@ -630,11 +630,10 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         val
     }
 
-    fn alloca(&mut self, size: Size, align: Align) -> &'ll Value {
+    fn alloca(&mut self, ty: &'ll Type, align: Align) -> &'ll Value {
         let mut bx = Builder::with_cx(self.cx);
+        // bx.position_at_start(unsafe { llvm::LLVMGetDetachedCtx(self.llbb()) });
         bx.position_at_start(unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) });
-        // bx.position_at_start(unsafe { llvm::LLVMGetDetachedCtx(self.llbb()) }); FIXME(CAIATHEN) do we still need this?
-        let ty = self.cx().type_array(self.cx().type_i8(), size.bytes());
         unsafe {
             let alloca = llvm::LLVMBuildAlloca(bx.llbuilder, ty, UNNAMED);
             llvm::LLVMSetAlignment(alloca, align.bytes() as c_uint);
