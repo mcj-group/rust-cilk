@@ -819,7 +819,11 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
     }
 
     fn sync_region_start(&mut self) -> &'ll Value {
-        self.call_intrinsic("llvm.syncregion.start", &[], &[])
+        let thebb = unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) };
+        unsafe {
+            llvm::LLVMRustPositionBuilderAtStart(self.llbuilder, thebb);
+        }
+        self.call_intrinsic("llvm.syncregion.start", &[])
     }
 
     fn tapir_runtime_start(&mut self) -> &'ll Value {
