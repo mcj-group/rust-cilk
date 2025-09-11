@@ -5,8 +5,7 @@ use std::sync::Arc;
 use rustc_ast::*;
 use rustc_ast_pretty::pprust::expr_to_string;
 use rustc_data_structures::stack::ensure_sufficient_stack;
-use rustc_errors::msg;
-use rustc_hir as hir;
+use rustc_hir::{self as hir, Stmt};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::definitions::DefPathData;
 use rustc_hir::{HirId, Target, find_attr};
@@ -1884,23 +1883,69 @@ impl<'hir> LoweringContext<'_, 'hir> {
         // For cilk_for we instead perform Some(<pat>) => cilk_spawn <body>.
         let some_arm = {
             let some_pat = self.pat_some(pat_span, pat);
-            let body_block =
-                self.with_loop_scope(loop_hir_id, |this| this.lower_block(body, false));
+            let body_block = self.with_loop_scope(e.id, |this| this.lower_block(body, false));
+
+            let new_stmt = Stmt{hir_id: self.next_id(), kind: rustc_hir::StmtKind::Semi(&self.expr_spawn_block(body_block)), span: body_block.span};
+            // add the my i binding here... not sure how that works
+            let new_block = rustc_hir::Block{stmts: [new_stmt], expr: None, hir_id: self.next_id(), rules: rustc_hir::BlockCheckMode::DefaultBlock, targeted_by_break: false, span: body_block.span};
+            let new_body = rustc_hir::Body{params: [], value: new_block};
+            // body: new_body.id()
+            let fn_decl = self.arena.alloc(hir::FnDecl {
+                inputs: [],
+                output: rustc_hir::FnRetTy::DefaultReturn(body_block.span),
+                c_variadic: false,
+                implicit_self: hir::ImplicitSelfKind::None,
+                lifetime_elision_allowed: false,
+            });
+
+            let new_closure = rustc_hir::Closure{
+                binder: rustc_hir::ClosureBinder::Default,
+                constness: rustc_hir::Constness::NotConst,
+                capture_clause: rustc_hir::CaptureBy::Ref,
+                bound_generic_params: [],
+                body: new_body.id(),
+                kind: rustc_hir::ClosureKind::Closure,
+                fn_decl_span: body_block.span, // TODO: this might not be correct
+                fn_arg_span: body_block.span, // TODO: this might not be correct
+                def_id: self.local_def_id(e.id), // TODO: this might not be correct (I have no idea what e is) I think I need to make a new defid instead of using e.id based on hir_tree_dump2.txt
+                fn_decl
+            };
+
+            let closure_expr = rustc_hir::Expr{
+                hir_id: self.next_id(),
+                kind: rustc_hir::ExprKind::Closure(&new_closure),
+                span: body_block.span
+            };
+
+            let call_expr = rustc_hir::Expr{
+                hir_id: self.next_id(),
+                kind: rustc_hir::ExprKind::Call(&closure_expr, []),
+                span: body_block.span
+            };
+
+            let outer_stmt = Stmt{
+                hir_id: self.next_id(), 
+                kind: rustc_hir::StmtKind::Semi(call_expr), 
+                span: body_block.span
+            };
+
+            let outer_block = rustc_hir::Block{
+                stmts: [outer_stmt], 
+                expr: None, 
+                hir_id: self.next_id(), 
+                rules: rustc_hir::BlockCheckMode::DefaultBlock, 
+                targeted_by_break: false, 
+                span: for_span // I think this is correct
+            };
+
+            let new_body_expr = rustc_hir::Expr{
+                hir_id: self.next_id(),
+                kind: rustc_hir::ExprKind::Block(&outer_block, None),
+                span: for_span // actually IDK if this is correct it might be body_block.span
+            };
+
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
                 self.arena.alloc(self.expr_spawn_block(body_block))
-                // self.arena.alloc(
-                //     self.lower_expr_closure_2(
-                //         // FIXME: could I spit out some values for compilation of a real closure? Get it to spit out details for a microbenchmark with a real closure wrapping a cilk spawn, then copy it here
-                //         &ClosureBinder::NotPresent, // idk
-                //         CaptureBy::Value { move_kw: pat_span }, // idk
-                //         e.id, // idk, but check the stuff I did on Send/Sync
-                //         Const::No, // idk
-                //         Movability::Static, // idk
-                //         &FnDecl{ inputs: thin_vec![], output: FnRetTy::Default(pat_span)}, // FIXME: is this the right span?
-                //         body_block3,
-                //         pat_span, // idk
-                //         pat_span // idk
-                // ))
             } else {
                 self.arena.alloc(self.expr_block(body_block))
             };
