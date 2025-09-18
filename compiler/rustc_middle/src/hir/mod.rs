@@ -409,10 +409,14 @@ pub fn provide(providers: &mut Providers) {
     providers.hir_crate_items = map::hir_crate_items;
     providers.crate_hash = map::crate_hash;
     providers.hir_module_items = map::hir_module_items;
-    providers.local_def_id_to_hir_id = |tcx, def_id| match tcx.hir_crate(()).owners[def_id] {
-        MaybeOwner::Owner(_) => HirId::make_owner(def_id),
-        MaybeOwner::NonOwner(hir_id) => hir_id,
-        MaybeOwner::Phantom => bug!("No HirId for {:?}", def_id),
+    providers.opt_local_def_id_to_hir_id = |tcx, def_id| {
+        eprintln!("Owners array length: {}", tcx.hir_crate(()).owners.len());
+        eprintln!("Trying to access DefId: {:?}", def_id);
+        Some(match tcx.hir_crate(()).owners[def_id] { // THIS LINE IS CAUSING THE ERROR
+            MaybeOwner::Owner(_) => HirId::make_owner(def_id),
+            MaybeOwner::NonOwner(hir_id) => hir_id,
+            MaybeOwner::Phantom => bug!("No HirId for {:?}", def_id),
+        })
     };
     providers.opt_hir_owner_nodes =
         |tcx, id| tcx.hir_crate(()).owners.get(id)?.as_owner().map(|i| &i.nodes);
