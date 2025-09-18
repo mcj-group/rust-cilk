@@ -12,7 +12,7 @@ use crate::{FnDeclKind, ImplTraitPosition};
 use rustc_ast::ptr::P as AstP;
 use rustc_ast::*;
 use rustc_data_structures::stack::ensure_sufficient_stack;
-use rustc_hir::{self as hir, Stmt};
+use rustc_hir::{self as hir};
 use rustc_hir::def::{DefKind, Res};
 use rustc_session::errors::report_lit_error;
 use rustc_span::source_map::{respan, Spanned};
@@ -984,56 +984,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
         hir::ExprKind::Closure(c)
     }
 
-    // fn lower_expr_closure_2(
-    //     &mut self,
-    //     binder: &ClosureBinder,
-    //     capture_clause: CaptureBy,
-    //     closure_id: NodeId,
-    //     constness: Const,
-    //     movability: Movability,
-    //     decl: &FnDecl,
-    //     body: hir::Expr<'hir>,
-    //     fn_decl_span: Span,
-    //     fn_arg_span: Span,
-    // ) -> hir::Expr<'hir> {
-    //     let (binder_clause, generic_params) = self.lower_closure_binder(binder);
-
-    //     let (body_id, closure_kind) = self.with_new_scopes(fn_decl_span, move |this| {
-    //         let mut coroutine_kind = None;
-    //         let body_id = this.lower_fn_body(decl, |this| {
-    //             let e = body;
-    //             coroutine_kind = this.coroutine_kind;
-    //             e
-    //         });
-    //         let coroutine_option =
-    //             this.closure_movability_for_fn(decl, fn_decl_span, coroutine_kind, movability);
-    //         (body_id, coroutine_option)
-    //     });
-
-    //     let bound_generic_params = self.lower_lifetime_binder(closure_id, generic_params);
-    //     // Lower outside new scope to preserve `is_in_loop_condition`.
-    //     let fn_decl = self.lower_fn_decl(decl, closure_id, fn_decl_span, FnDeclKind::Closure, None);
-
-    //     let c: &mut rustc_hir::Closure<'_> = self.arena.alloc(hir::Closure {
-    //         def_id: self.local_def_id(closure_id),
-    //         binder: binder_clause,
-    //         capture_clause,
-    //         bound_generic_params,
-    //         fn_decl,
-    //         body: body_id,
-    //         fn_decl_span: self.lower_span(fn_decl_span),
-    //         fn_arg_span: Some(self.lower_span(fn_arg_span)),
-    //         kind: closure_kind,
-    //         constness: self.lower_constness(constness),
-    //     });
-
-    //     rustc_hir::Expr {
-    //         hir_id: self.next_id(),
-    //         kind: rustc_hir::ExprKind::Closure(c),
-    //         span: fn_decl_span,
-    //     }
-    // }
-
     fn closure_movability_for_fn(
         &mut self,
         decl: &FnDecl,
@@ -1661,67 +1611,81 @@ impl<'hir> LoweringContext<'_, 'hir> {
             let some_pat = self.pat_some(pat_span, pat);
             let body_block = self.with_loop_scope(e.id, |this| this.lower_block(body, false));
 
-            let new_stmt = Stmt{hir_id: self.next_id(), kind: rustc_hir::StmtKind::Semi(&self.expr_spawn_block(body_block)), span: body_block.span};
-            // add the my i binding here... not sure how that works
-            let new_block = rustc_hir::Block{stmts: [new_stmt], expr: None, hir_id: self.next_id(), rules: rustc_hir::BlockCheckMode::DefaultBlock, targeted_by_break: false, span: body_block.span};
-            let new_body = rustc_hir::Body{params: [], value: new_block};
-            // body: new_body.id()
-            let fn_decl = self.arena.alloc(hir::FnDecl {
-                inputs: [],
-                output: rustc_hir::FnRetTy::DefaultReturn(body_block.span),
-                c_variadic: false,
-                implicit_self: hir::ImplicitSelfKind::None,
-                lifetime_elision_allowed: false,
-            });
-
-            let new_closure = rustc_hir::Closure{
-                binder: rustc_hir::ClosureBinder::Default,
-                constness: rustc_hir::Constness::NotConst,
-                capture_clause: rustc_hir::CaptureBy::Ref,
-                bound_generic_params: [],
-                body: new_body.id(),
-                kind: rustc_hir::ClosureKind::Closure,
-                fn_decl_span: body_block.span, // TODO: this might not be correct
-                fn_arg_span: body_block.span, // TODO: this might not be correct
-                def_id: self.local_def_id(e.id), // TODO: this might not be correct (I have no idea what e is) I think I need to make a new defid instead of using e.id based on hir_tree_dump2.txt
-                fn_decl
-            };
-
-            let closure_expr = rustc_hir::Expr{
-                hir_id: self.next_id(),
-                kind: rustc_hir::ExprKind::Closure(&new_closure),
-                span: body_block.span
-            };
-
-            let call_expr = rustc_hir::Expr{
-                hir_id: self.next_id(),
-                kind: rustc_hir::ExprKind::Call(&closure_expr, []),
-                span: body_block.span
-            };
-
-            let outer_stmt = Stmt{
-                hir_id: self.next_id(), 
-                kind: rustc_hir::StmtKind::Semi(call_expr), 
-                span: body_block.span
-            };
-
-            let outer_block = rustc_hir::Block{
-                stmts: [outer_stmt], 
-                expr: None, 
-                hir_id: self.next_id(), 
-                rules: rustc_hir::BlockCheckMode::DefaultBlock, 
-                targeted_by_break: false, 
-                span: for_span // I think this is correct
-            };
-
-            let new_body_expr = rustc_hir::Expr{
-                hir_id: self.next_id(),
-                kind: rustc_hir::ExprKind::Block(&outer_block, None),
-                span: for_span // actually IDK if this is correct it might be body_block.span
-            };
-
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
-                self.arena.alloc(self.expr_spawn_block(body_block))
+                // 1) Wrap the body in a cilk_spawn
+                let spawn_expr_val = self.expr_spawn_block(body_block);           // Expr<'hir>
+                let spawn_expr = self.arena.alloc(spawn_expr_val);                // &'hir Expr<'hir>
+                let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
+                let stmts_slice = self.arena.alloc_from_iter([spawn_stmt]);
+
+                // let id = lcx.next_node_id();
+                // let hir_id = lcx.next_id();
+
+                // let def_id = lcx.create_def(
+                //     lcx.current_hir_id_owner.def_id,
+                //     id,
+                //     kw::Empty,
+                //     DefKind::AnonConst,
+                //     span,
+                // );
+
+                // lcx.children.push((def_id, hir::MaybeOwner::NonOwner(hir_id)));
+
+                // Create and register the closure DefId properly
+                let closure_node_id = self.next_node_id();
+                let closure_hir_id = self.next_id();
+                let parent_id = self.current_hir_id_owner;
+                let closure_def_id = self.create_def(
+                    parent_id.def_id,
+                    closure_node_id,
+                    kw::Empty,
+                    DefKind::Closure,
+                    body_block.span,
+                );
+                self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
+
+                // Create the body under the PARENT function's DefId (not the closure's DefId)
+                let inner_block = self.block_all(body_block.span, stmts_slice, None);
+                let inner_block_expr = self.expr_block(inner_block);
+                let body_id = self.lower_body(|_this| (&[], inner_block_expr));
+
+                // Create the function declaration
+                let fn_decl = self.arena.alloc(hir::FnDecl {
+                    inputs: &[],
+                    output: hir::FnRetTy::DefaultReturn(self.lower_span(body_block.span)),
+                    c_variadic: false,
+                    implicit_self: hir::ImplicitSelfKind::None,
+                    lifetime_elision_allowed: false,
+                });
+
+                // Create the closure HIR node with the closure DefId
+                let closure_hir = self.arena.alloc(hir::Closure {
+                    def_id: closure_def_id,  // Closure gets its own DefId
+                    binder: hir::ClosureBinder::Default,
+                    capture_clause: hir::CaptureBy::Ref,
+                    bound_generic_params: &[],
+                    fn_decl,
+                    body: body_id,  // But body stays under parent DefId
+                    fn_decl_span: self.lower_span(body_block.span),
+                    fn_arg_span: Some(self.lower_span(body_block.span)),
+                    kind: hir::ClosureKind::Closure,
+                    constness: hir::Constness::NotConst,
+                });
+
+                let closure_expr_val = hir::Expr { hir_id: closure_hir_id, kind: hir::ExprKind::Closure(closure_hir), span: self.lower_span(body_block.span) };
+                let closure_expr = self.arena.alloc(closure_expr_val); 
+
+                let empty_args: &'hir [hir::Expr<'hir>] = self.arena.alloc_from_iter([]);
+                let call_expr_val = self.expr(body_block.span, hir::ExprKind::Call(closure_expr, empty_args));
+                let call_expr = self.arena.alloc(call_expr_val);
+
+                let outer_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(call_expr));
+                let outer_stmts_slice = self.arena.alloc_from_iter([outer_stmt]);
+                let outer_block = self.block_all(body_block.span, outer_stmts_slice, None);
+                let outer_block_expr_val = self.expr_block(outer_block);
+
+                self.arena.alloc(outer_block_expr_val)
+
             } else {
                 self.arena.alloc(self.expr_block(body_block))
             };
