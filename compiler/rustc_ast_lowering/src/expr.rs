@@ -1673,6 +1673,12 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 });
 
                 let closure_expr_val = hir::Expr { hir_id: closure_hir_id, kind: hir::ExprKind::Closure(closure_hir), span: self.lower_span(body_block.span) };
+
+                let inline_attr = attr::mk_attr_nested_word(&self.tcx.sess.parse_sess.attr_id_generator, AttrStyle::Outer, sym::inline, sym::always, head_span); // TODO: are these the correct spans?
+                let orphaning_attr = attr::mk_attr_word(&self.tcx.sess.parse_sess.attr_id_generator, AttrStyle::Outer, sym::orphaning, head_span); // TODO: are these the correct spans?
+                let attrs: AttrVec = thin_vec![inline_attr, orphaning_attr];
+                self.lower_attrs(closure_hir_id, &attrs);
+
                 let closure_expr = self.arena.alloc(closure_expr_val); 
 
                 let empty_args: &'hir [hir::Expr<'hir>] = self.arena.alloc_from_iter([]);
