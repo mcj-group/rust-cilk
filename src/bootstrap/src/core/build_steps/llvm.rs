@@ -455,7 +455,7 @@ impl Step for Llvm {
             cfg.define("LLVM_TOOL_LLVM_RTDYLD_BUILD", "OFF");
         }
         // We also want to build the cheetah and cilktools runtimes to get the right ABI files.
-        cfg.define("LLVM_ENABLE_RUNTIMES", "cheetah;cilktools");
+        cfg.define("LLVM_ENABLE_RUNTIMES", "cheetah");
 
         let mut enabled_llvm_projects = Vec::new();
 
