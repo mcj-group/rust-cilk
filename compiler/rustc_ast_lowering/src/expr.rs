@@ -9,6 +9,7 @@ use super::errors::{
 use super::ResolverAstLoweringExt;
 use super::{ImplTraitContext, LoweringContext, ParamMode, ParenthesizedGenericArgs};
 use crate::{FnDeclKind, ImplTraitPosition};
+use rustc_ast::mut_visit::MutVisitor;
 use rustc_ast::ptr::P as AstP;
 use rustc_ast::*;
 use rustc_data_structures::stack::ensure_sufficient_stack;
@@ -20,6 +21,29 @@ use rustc_span::symbol::{kw, sym, Ident, Symbol};
 use rustc_span::DUMMY_SP;
 use rustc_span::{DesugaringKind, Span};
 use thin_vec::{thin_vec, ThinVec};
+
+struct ReplaceVariable {
+    target_ident: Ident,
+    target_id: NodeId,
+    new_ident: Ident,
+    new_id: NodeId,
+    // new_path_segment: PathSegment
+}
+impl MutVisitor for ReplaceVariable {
+    fn visit_path(&mut self, Path { segments, span, tokens: _ }: &mut Path) {
+        self.visit_span(span); 
+        for PathSegment { ident, id, args: _ } in segments {
+            if ident.name == self.target_ident.name && *id == self.target_id{
+                *ident = self.new_ident;
+                *id = self.new_id;
+            }
+            // self.visit_ident(ident);
+            // self.visit_id(id);
+            // self.visit_opt(args, |args| vis.visit_generic_args(args)); // TODO: maybe I need to visit the args
+        }
+        // visit_lazy_tts(tokens, vis); // TODO: maybe I need to visit the tokens
+    }
+}
 
 impl<'hir> LoweringContext<'_, 'hir> {
     fn lower_exprs(&mut self, exprs: &[AstP<Expr>]) -> &'hir [hir::Expr<'hir>] {
@@ -1606,32 +1630,19 @@ impl<'hir> LoweringContext<'_, 'hir> {
         };
 
         // Some(<pat>) => <body>,
-        // For cilk_for we instead perform Some(<pat>) => cilk_spawn <body>.
+        // For cilk_for we instead perform Some(<pat>) => call < closure < cilk_spawn <body> > >.
         let some_arm = {
             let some_pat = self.pat_some(pat_span, pat);
             let body_block = self.with_loop_scope(e.id, |this| this.lower_block(body, false));
 
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
-                // 1) Wrap the body in a cilk_spawn
-                let spawn_expr_val = self.expr_spawn_block(body_block);           // Expr<'hir>
-                let spawn_expr = self.arena.alloc(spawn_expr_val);                // &'hir Expr<'hir>
+                // Wrap the body in a cilk_spawn
+                let spawn_expr_val = self.expr_spawn_block(body_block);
+                let spawn_expr = self.arena.alloc(spawn_expr_val);
                 let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
                 let stmts_slice = self.arena.alloc_from_iter([spawn_stmt]);
 
-                // let id = lcx.next_node_id();
-                // let hir_id = lcx.next_id();
-
-                // let def_id = lcx.create_def(
-                //     lcx.current_hir_id_owner.def_id,
-                //     id,
-                //     kw::Empty,
-                //     DefKind::AnonConst,
-                //     span,
-                // );
-
-                // lcx.children.push((def_id, hir::MaybeOwner::NonOwner(hir_id)));
-
-                // Create and register the closure DefId properly
+                // Create and register the closure DefId
                 let closure_node_id = self.next_node_id();
                 let closure_hir_id = self.next_id();
                 let parent_id = self.current_hir_id_owner;
@@ -1642,9 +1653,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     DefKind::Closure,
                     body_block.span,
                 );
+                // Register the closure DefId
                 self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
 
-                // Create the body under the PARENT function's DefId (not the closure's DefId)
+                // Create the closure body
                 let inner_block = self.block_all(body_block.span, stmts_slice, None);
                 let inner_block_expr = self.expr_block(inner_block);
                 let body_id = self.lower_body(|_this| (&[], inner_block_expr));
@@ -1658,7 +1670,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     lifetime_elision_allowed: false,
                 });
 
-                // Create the closure HIR node with the closure DefId
+                // Create the closure
                 let closure_hir = self.arena.alloc(hir::Closure {
                     def_id: closure_def_id,  // Closure gets its own DefId
                     binder: hir::ClosureBinder::Default,
@@ -1674,6 +1686,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 let closure_expr_val = hir::Expr { hir_id: closure_hir_id, kind: hir::ExprKind::Closure(closure_hir), span: self.lower_span(body_block.span) };
 
+                // Create the inline and orphaning attributes
                 let inline_attr = attr::mk_attr_nested_word(&self.tcx.sess.parse_sess.attr_id_generator, AttrStyle::Outer, sym::inline, sym::always, head_span); // TODO: are these the correct spans?
                 let orphaning_attr = attr::mk_attr_word(&self.tcx.sess.parse_sess.attr_id_generator, AttrStyle::Outer, sym::orphaning, head_span); // TODO: are these the correct spans?
                 let attrs: AttrVec = thin_vec![inline_attr, orphaning_attr];
@@ -1681,17 +1694,19 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 let closure_expr = self.arena.alloc(closure_expr_val); 
 
+                // Create call
                 let empty_args: &'hir [hir::Expr<'hir>] = self.arena.alloc_from_iter([]);
                 let call_expr_val = self.expr(body_block.span, hir::ExprKind::Call(closure_expr, empty_args));
                 let call_expr = self.arena.alloc(call_expr_val);
 
+                // Create outer body
                 let outer_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(call_expr));
                 let outer_stmts_slice = self.arena.alloc_from_iter([outer_stmt]);
                 let outer_block = self.block_all(body_block.span, outer_stmts_slice, None);
                 let outer_block_expr_val = self.expr_block(outer_block);
 
+                // Create body expression of the Some arm
                 self.arena.alloc(outer_block_expr_val)
-
             } else {
                 self.arena.alloc(self.expr_block(body_block))
             };
