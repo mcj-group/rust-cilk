@@ -32,8 +32,10 @@ struct ReplaceVariable {
 impl MutVisitor for ReplaceVariable {
     fn visit_path(&mut self, Path { segments, span, tokens: _ }: &mut Path) {
         self.visit_span(span); 
+        println!("ReplaceVariable visit_path");
         for PathSegment { ident, id, args: _ } in segments {
-            if ident.name == self.target_ident.name && *id == self.target_id{
+            if ident.name == self.target_ident.name {
+                println!("found target PathSegment {:?}", self.target_id);
                 *ident = self.new_ident;
                 *id = self.new_id;
             }
@@ -1611,11 +1613,12 @@ impl<'hir> LoweringContext<'_, 'hir> {
         e: &Expr,
         pat: &Pat,
         head: &Expr,
-        body: &Block,
+        body: &AstP<Block>,
         opt_label: Option<Label>,
         loop_kind: ForLoopKind,
     ) -> hir::Expr<'hir> {
         let head = self.lower_expr_mut(head);
+        let ast_pat = pat;
         let pat = self.lower_pat(pat);
         let for_span =
             self.mark_span_with_reason(DesugaringKind::ForLoop, self.lower_span(e.span), None);
@@ -1632,18 +1635,114 @@ impl<'hir> LoweringContext<'_, 'hir> {
         // Some(<pat>) => <body>,
         // For cilk_for we instead perform Some(<pat>) => call < closure < cilk_spawn <body> > >.
         let some_arm = {
+
             let some_pat = self.pat_some(pat_span, pat);
-            let body_block = self.with_loop_scope(e.id, |this| this.lower_block(body, false));
 
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
+                let induction_var_ident = match &ast_pat.kind{
+                    PatKind::Ident (_bind, ident, _other) => *ident,
+                    _ => Ident::empty() // TODO will this ever happen?
+                };
+
+                // create NodeId and Ident for shadowing variable
+                let shadow_node_id = self.next_node_id();
+                eprintln!("shadow_node_id details: {:#?}", shadow_node_id);
+                let shadow_ident = rustc_span::symbol::Ident::from_str("shadow");
+                
+                // create PathSegment for induction variable (we use PathSegment to reference objects in Paths a.k.a namespaces)
+                let mut pathsegs = ThinVec::new();
+                let new_res = rustc_hir::def::PartialRes::new(hir::def::Res::Local(ast_pat.id));
+                let ast_pathseg_id = self.next_node_id();
+                self.resolver.partial_res_map.insert(ast_pathseg_id, new_res);
+                self.resolver.partial_res_map.insert(shadow_node_id, new_res);
+                
+
+                pathsegs.push(
+                    PathSegment { 
+                        ident: induction_var_ident, 
+                        id: ast_pathseg_id, // TODO: is this correct? I think this should be a new id because it is the id of the pathsegment, not of the pat?
+                        args: None 
+                    }
+                );
+
+                // create the init attribute for the Local Statement
+                let shadow_init = Some(self.lower_expr(&ast::Expr{
+                    span: ast_pat.span,
+                    attrs: ThinVec::new(),
+                    tokens: None,
+                    id: shadow_node_id, 
+                    kind: ExprKind::Path(
+                        None,
+                        // Some(QPath::Resolved(Some)), // FIXME this should not be None, but idk how to get this
+                        ast::Path{
+                            span: ast_pat.span,
+                            // lower_expr of a ExprKind::Path will go to lower_qpath in compiler/rustc_ast_lowering/src/path.rs and this will give us Resolved and hopefully the res in PathSegments will be correct as well
+                            // there's almost resolution here to get res: lower_res in compiler/rustc_ast_lowering/src/lib.rs
+                            tokens: None,
+                            segments: pathsegs
+                        }
+                    )
+                }));
+
+                // if let hir::ExprKind::Path(qpath) = shadow_init.kind {
+                //     if let hir::QPath::Resolved(_ty, p) = qpath {
+                //         p.res = hir::def::Res::Local(pat.hir_id);
+                //     }
+                // }
+
+                // create Pat for shadowing variable
+                let shadow_pat_id = self.next_node_id();
+                let shadow_pat = self.lower_pat(
+                    &ast::Pat{ // I did not need to do this in AST
+                        id: shadow_pat_id,
+                        kind: PatKind::Ident(
+                            ast::BindingAnnotation(ByRef::No, Mutability::Not), // TODO: this might need to be more general
+                            shadow_ident,
+                            None // TODO: this takes Pat and maybe I could put the induction var pat here? But IDK what it does
+                        ),
+                        span: ast_pat.span,
+                        tokens: None // TODO: should this be empty?
+                    }
+                ); // lower_pat -> lower_pat_mut -> lower_pat_ident
+
+                let shadow_res = rustc_hir::def::PartialRes::new(Res::Local(shadow_pat_id));
+                let shadow_path_seg_id = self.next_node_id();
+                let shadow_path_id = self.next_node_id();
+                self.resolver.partial_res_map.insert(shadow_path_id, shadow_res);
+                self.resolver.partial_res_map.insert(shadow_path_seg_id, shadow_res);
+
+                // create Local statement
+                let shadow_local_stmt = self.stmt_let_pat(
+                    None,
+                    pat_span,
+                    shadow_init,
+                    shadow_pat,
+                    hir::LocalSource::Normal, // idk if this is correct
+                );
+
+                let mut body_clone: AstP<Block> = body.clone();
+                // create new ReplaceVariable visitor
+                let mut visitor = ReplaceVariable{
+                    target_ident: induction_var_ident,
+                    target_id: ast_pat.id,
+                    new_ident: shadow_ident,
+                    new_id: shadow_path_seg_id,
+                };
+                // visit body block
+                visitor.visit_block(&mut body_clone);
+
+                let body_block = self.with_loop_scope(e.id, |this| this.lower_block(&*body_clone, false));
+                // let body_block = self.lower_block(&*body_clone, false);
                 // Wrap the body in a cilk_spawn
-                let spawn_expr_val = self.expr_spawn_block(body_block);
+                let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(body_block);
                 let spawn_expr = self.arena.alloc(spawn_expr_val);
                 let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
-                let stmts_slice = self.arena.alloc_from_iter([spawn_stmt]);
+                let stmts_slice = self.arena.alloc_from_iter([shadow_local_stmt, spawn_stmt]);
 
                 // Create and register the closure DefId
                 let closure_node_id = self.next_node_id();
+                eprintln!("closure_node_id details: {:#?}", closure_node_id);
+
                 let closure_hir_id = self.next_id();
                 let parent_id = self.current_hir_id_owner;
                 let closure_def_id = self.create_def(
@@ -1708,6 +1807,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 // Create body expression of the Some arm
                 self.arena.alloc(outer_block_expr_val)
             } else {
+                let body_block = self.with_loop_scope(e.id, |this| this.lower_block(body, false));
                 self.arena.alloc(self.expr_block(body_block))
             };
             self.arm(some_pat, body_expr)
