@@ -16,13 +16,6 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         self.arena.alloc(self.lower_block_noalloc(hir_id, b, targeted_by_break))
     }
 
-    // pub(super) fn new_lower_stmts(
-    //     &mut self,
-    //     mut ast_stmts: &[Stmt],
-    // ) -> (&'hir [hir::Stmt<'hir>], Option<&'hir hir::Expr<'hir>>) {
-    //     self.lower_stmts(ast_stmts)
-    // }
-
     pub(super) fn lower_block_noalloc(
         &mut self,
         hir_id: hir::HirId,
