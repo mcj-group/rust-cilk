@@ -9,7 +9,7 @@ use super::errors::{
 use super::ResolverAstLoweringExt;
 use super::{ImplTraitContext, LoweringContext, ParamMode, ParenthesizedGenericArgs};
 use crate::{FnDeclKind, ImplTraitPosition};
-use rustc_ast::mut_visit::MutVisitor;
+use rustc_ast::mut_visit::{ReplaceVariable, MutVisitor};
 use rustc_ast::ptr::P as AstP;
 use rustc_ast::*;
 use rustc_data_structures::stack::ensure_sufficient_stack;
@@ -21,31 +21,6 @@ use rustc_span::symbol::{kw, sym, Ident, Symbol};
 use rustc_span::DUMMY_SP;
 use rustc_span::{DesugaringKind, Span};
 use thin_vec::{thin_vec, ThinVec};
-
-struct ReplaceVariable {
-    target_ident: Ident,
-    target_id: NodeId,
-    new_ident: Ident,
-    new_id: NodeId,
-    // new_path_segment: PathSegment
-}
-impl MutVisitor for ReplaceVariable {
-    fn visit_path(&mut self, Path { segments, span, tokens: _ }: &mut Path) {
-        self.visit_span(span); 
-        println!("ReplaceVariable visit_path");
-        for PathSegment { ident, id, args: _ } in segments {
-            if ident.name == self.target_ident.name {
-                println!("found target PathSegment {:?}", self.target_id);
-                *ident = self.new_ident;
-                *id = self.new_id;
-            }
-            // self.visit_ident(ident);
-            // self.visit_id(id);
-            // self.visit_opt(args, |args| vis.visit_generic_args(args)); // TODO: maybe I need to visit the args
-        }
-        // visit_lazy_tts(tokens, vis); // TODO: maybe I need to visit the tokens
-    }
-}
 
 impl<'hir> LoweringContext<'_, 'hir> {
     fn lower_exprs(&mut self, exprs: &[AstP<Expr>]) -> &'hir [hir::Expr<'hir>] {
@@ -1721,15 +1696,20 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 );
 
                 let mut body_clone: AstP<Block> = body.clone();
+                let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
                 let mut visitor = ReplaceVariable{
                     target_ident: induction_var_ident,
                     target_id: ast_pat.id,
                     new_ident: shadow_ident,
                     new_id: shadow_path_seg_id,
+                    map_targets: &mut map_targets
                 };
                 // visit body block
                 visitor.visit_block(&mut body_clone);
+                for node_id in &map_targets{
+                    self.resolver.partial_res_map.insert(*node_id, shadow_res);
+                }
 
                 let body_block = self.with_loop_scope(e.id, |this| this.lower_block(&*body_clone, false));
                 // let body_block = self.lower_block(&*body_clone, false);

@@ -22,7 +22,6 @@ use smallvec::{smallvec, Array, SmallVec};
 use std::ops::DerefMut;
 use std::{panic, ptr};
 use thin_vec::ThinVec;
-use super::ResolverAstLoweringExt;
 
 pub trait ExpectOne<A: Array> {
     fn expect_one(self, err: &'static str) -> A::Item;
@@ -1707,16 +1706,16 @@ impl<N: DummyAstNode, T: DummyAstNode> DummyAstNode for crate::ast_traits::AstNo
     }
 }
 
-struct ReplaceVariable {
-    target_ident: Ident,
-    target_id: NodeId,
-    new_ident: Ident,
-    new_id: NodeId,
-    new_path_id: NodeId,
+pub struct ReplaceVariable<'hir> {
+    pub target_ident: Ident,
+    pub target_id: NodeId,
+    pub new_ident: Ident,
+    pub new_id: NodeId,
+    pub map_targets: &'hir mut Vec<NodeId>,
 }
 
-impl ReplaceVariable {
-    fn visit_path_2(&mut self, Path { segments, span, tokens: _ }: &mut Path, e: &mut Expr) {
+impl ReplaceVariable<'_> {
+    fn visit_path_2(&mut self, Path { segments, span, tokens: _ }: &mut Path, e: &mut NodeId) {
         self.visit_span(span); 
         println!("ReplaceVariable visit_path");
         for PathSegment { ident, id, args: _ } in segments {
@@ -1724,7 +1723,7 @@ impl ReplaceVariable {
                 println!("found target PathSegment {:?}", self.target_id);
                 *ident = self.new_ident;
                 *id = self.new_id;
-                e.id = self.new_path_id;
+                self.map_targets.push(*e);
             }
             // self.visit_ident(ident);
             // self.visit_id(id);
@@ -1735,7 +1734,7 @@ impl ReplaceVariable {
 
     fn noop_visit_expr_2(
         e: &mut Expr,
-        vis: &mut ReplaceVariable,
+        vis: &mut ReplaceVariable<'_>,
     ) {
         let Expr { kind, id, span, attrs, tokens } = e;
         match kind {
@@ -1864,7 +1863,7 @@ impl ReplaceVariable {
             ExprKind::Underscore => {}
             ExprKind::Path(qself, path) => {
                 vis.visit_qself(qself);
-                vis.visit_path_2(path, e);
+                vis.visit_path_2(path, id);
             }
             ExprKind::Break(label, expr) => {
                 visit_opt(label, |label| vis.visit_label(label));
@@ -1919,7 +1918,7 @@ impl ReplaceVariable {
     }
 }
 
-impl MutVisitor for ReplaceVariable {
+impl MutVisitor for ReplaceVariable<'_> {
     fn visit_expr(&mut self, e: &mut P<Expr>) {
         ReplaceVariable::noop_visit_expr_2(e, self);
     }
