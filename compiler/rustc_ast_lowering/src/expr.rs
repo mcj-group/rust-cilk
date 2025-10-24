@@ -1621,7 +1621,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 // create NodeId and Ident for shadowing variable
                 let shadow_node_id = self.next_node_id();
-                eprintln!("shadow_node_id details: {:#?}", shadow_node_id);
                 let shadow_ident = rustc_span::symbol::Ident::from_str("shadow");
                 
                 // create PathSegment for induction variable (we use PathSegment to reference objects in Paths a.k.a namespaces)
@@ -1721,7 +1720,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 // Create and register the closure DefId
                 let closure_node_id = self.next_node_id();
-                eprintln!("closure_node_id details: {:#?}", closure_node_id);
 
                 let closure_hir_id = self.next_id();
                 let parent_id = self.current_hir_id_owner;
