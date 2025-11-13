@@ -332,6 +332,8 @@ pub struct Body<'tcx> {
     #[type_foldable(identity)]
     #[type_visitable(ignore)]
     pub function_coverage_info: Option<Box<coverage::FunctionCoverageInfo>>,
+
+    pub orphaning: bool,
 }
 
 impl<'tcx> Body<'tcx> {
@@ -346,6 +348,7 @@ impl<'tcx> Body<'tcx> {
         span: Span,
         coroutine: Option<Box<CoroutineInfo<'tcx>>>,
         tainted_by_errors: Option<ErrorGuaranteed>,
+        orphaning: bool
     ) -> Self {
         // We need `arg_count` locals, and one for the return place.
         assert!(
@@ -375,6 +378,7 @@ impl<'tcx> Body<'tcx> {
             tainted_by_errors,
             coverage_info_hi: None,
             function_coverage_info: None,
+            orphaning,
         };
         body.is_polymorphic = body.has_non_region_param();
         body
@@ -406,6 +410,7 @@ impl<'tcx> Body<'tcx> {
             tainted_by_errors: None,
             coverage_info_hi: None,
             function_coverage_info: None,
+            orphaning: false
         };
         body.is_polymorphic = body.has_non_region_param();
         body
