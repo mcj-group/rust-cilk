@@ -731,6 +731,10 @@ impl<'a, 'gcc, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'a, 'gcc, 'tc
         unimplemented!();
     }
 
+    fn orphaning_sync_region_start(&mut self, token: RValue<'gcc>, count: u64) {
+        unimplemented!();
+    }
+
     fn tapir_runtime_start(&mut self) -> RValue<'gcc> {
         unimplemented!();
     }
