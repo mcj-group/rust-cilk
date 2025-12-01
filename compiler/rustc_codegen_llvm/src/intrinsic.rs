@@ -836,8 +836,8 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         unsafe {
             llvm::LLVMPositionBuilderAtEnd(self.llbuilder, bb);
         }
-        println!("calling llvm.orphaning.syncregionn");
-        self.call_intrinsic("llvm.orphaning.syncregionn", &[token]);
+        println!("calling llvm.orphaning.syncregion");
+        self.call_intrinsic("llvm.orphaning.syncregion", &[token]);
     }
 
     fn tapir_runtime_start(&mut self) -> &'ll Value {
