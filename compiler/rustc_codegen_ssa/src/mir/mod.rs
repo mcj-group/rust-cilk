@@ -8,6 +8,7 @@ use rustc_middle::mir::UnwindTerminateReason;
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
 use rustc_target::abi::call::{FnAbi, PassMode};
+use smallvec::SmallVec;
 
 use std::iter;
 
@@ -110,6 +111,22 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
 
     /// Caller location propagated if this function has `#[track_caller]`.
     caller_location: Option<OperandRef<'tcx, Bx::Value>>,
+
+    /// The sync_region for this function. We expect to only need one sync region for simple
+    /// cases, so we'll not worry about a more complex representation for now. We also don't use
+    /// OperandRef here since sync regions don't have a corresponding Rust type and are fairly
+    /// similar to PhantomData. We do cache the sync region so that the first time it's requested,
+    /// we add a statement to compute the sync region.
+    sync_region: Option<Bx::Value>,
+
+    /// We need to know the basic blocks terminated by back-edges that go into
+    /// parallel loop headers. This is so we can annotate with the right metadata.
+    parallel_back_edges: BitSet<mir::BasicBlock>,
+
+    /// A stack of values returned from `tapir_runtime_start` for use in their corresponding `tapir_runtime_stop`
+    /// call. We might need a more complex data structure than this if the token should ever be reused, but it's
+    /// my impression that that isn't the case.
+    runtime_hint_stack: SmallVec<[Bx::Value; 1]>,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -207,6 +224,9 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         debug_context,
         per_local_var_debug_info: None,
         caller_location: None,
+        sync_region: None,
+        parallel_back_edges: BitSet::new_empty(mir.basic_blocks.len()),
+        runtime_hint_stack: SmallVec::new(),
     };
 
     // It may seem like we should iterate over `required_consts` to ensure they all successfully
@@ -255,6 +275,43 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
 
     // Apply debuginfo to the newly allocated locals.
     fx.debug_introduce_locals(&mut start_bx);
+
+    let uses_cilk_control_flow = || {
+        mir.basic_blocks.iter().any(|bb| {
+            matches!(
+                bb.terminator().kind,
+                mir::TerminatorKind::Detach { .. }
+                    | mir::TerminatorKind::Reattach { .. }
+                    | mir::TerminatorKind::Sync { .. }
+            )
+        })
+    };
+
+    let parallel_back_edges = || {
+        let mut seen = rustc_data_structures::fx::FxHashSet::default();
+        mir::traversal::reverse_postorder(mir).filter_map(move |(bb, bb_data)| {
+            seen.insert(bb);
+            if let mir::TerminatorKind::Goto { target } = bb_data.terminator().kind {
+                // If the target of the jump is a parallel loop header and we've already observed
+                // it, we know this must be a loop back-edge.
+                if mir.basic_blocks[target].is_parallel_loop_header && seen.contains(&target) {
+                    return Some(bb);
+                }
+            }
+            None
+        })
+    };
+
+    if Bx::supports_tapir() && uses_cilk_control_flow() {
+        // Add a sync region at the top of the function, so we can use it later.
+        fx.sync_region = Some(start_bx.sync_region_start());
+
+        // Let's figure out the parallel back-edges. These are edges into parallel
+        // loop headers.
+        parallel_back_edges().for_each(|bb| {
+            fx.parallel_back_edges.insert(bb);
+        });
+    }
 
     // The builders will be created separately for each basic block at `codegen_block`.
     // So drop the builder of `start_llbb` to avoid having two at the same time.

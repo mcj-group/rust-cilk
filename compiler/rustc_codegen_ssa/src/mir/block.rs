@@ -33,6 +33,11 @@ enum MergingSucc {
     True,
 }
 
+enum AddParallelLoopMetadata {
+    False,
+    True,
+}
+
 /// Used by `FunctionCx::codegen_terminator` for emitting common patterns
 /// e.g., creating a basic block, calling a function, etc.
 struct TerminatorCodegenHelper<'tcx> {
@@ -125,6 +130,23 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         target: mir::BasicBlock,
         mergeable_succ: bool,
     ) -> MergingSucc {
+        self.funclet_br_maybe_add_metadata(
+            fx,
+            bx,
+            target,
+            mergeable_succ,
+            AddParallelLoopMetadata::False,
+        )
+    }
+
+    fn funclet_br_maybe_add_metadata<Bx: BuilderMethods<'a, 'tcx>>(
+        &self,
+        fx: &mut FunctionCx<'a, 'tcx, Bx>,
+        bx: &mut Bx,
+        target: mir::BasicBlock,
+        mergeable_succ: bool,
+        add_parallel_loop_metadata: AddParallelLoopMetadata,
+    ) -> MergingSucc {
         let (needs_landing_pad, is_cleanupret) = self.llbb_characteristics(fx, target);
         if mergeable_succ && !needs_landing_pad && !is_cleanupret {
             // We can merge the successor into this bb, so no need for a `br`.
@@ -139,7 +161,10 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
                 // to a trampoline.
                 bx.cleanup_ret(self.funclet(fx).unwrap(), Some(lltarget));
             } else {
-                bx.br(lltarget);
+                let inst = bx.br(lltarget);
+                if matches!(add_parallel_loop_metadata, AddParallelLoopMetadata::True) {
+                    bx.tapir_loop_spawn_strategy_metadata(inst);
+                }
             }
             MergingSucc::False
         }
@@ -1131,6 +1156,16 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             mergeable_succ,
         )
     }
+
+    fn sync_region(&self) -> Bx::Value {
+        self.try_sync_region().unwrap_or_else(|| {
+            bug!("expected to have sync region!");
+        })
+    }
+
+    fn try_sync_region(&self) -> Option<Bx::Value> {
+        self.sync_region
+    }
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -1214,7 +1249,24 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
 
             mir::TerminatorKind::Goto { target } => {
-                helper.funclet_br(self, bx, target, mergeable_succ())
+                let add_tapir_metadata = if self.parallel_back_edges.contains(bb) {
+                    AddParallelLoopMetadata::True
+                } else {
+                    AddParallelLoopMetadata::False
+                };
+                // NOTE(jhilton): we attach the metadata to the parallel loop back edge.
+                // This is because in the structure of a loop, the back edge is more
+                // fundamental than the header and because the way LLVM detects loop metadata
+                // is by canonicalizing then checking the back edge. By adding the metadata to
+                // the back edge, we don't rely on the canonicalization succeeding, so it's a
+                // little less fragile (although I expect the canonicalization is very robust).
+                helper.funclet_br_maybe_add_metadata(
+                    self,
+                    bx,
+                    target,
+                    mergeable_succ(),
+                    add_tapir_metadata,
+                )
             }
 
             mir::TerminatorKind::SwitchInt { ref discr, ref targets } => {
@@ -1297,20 +1349,33 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 mergeable_succ(),
             ),
 
-            // FIXME(jhilton): all this codegen is just to no-ops. Change this later :)
-            mir::TerminatorKind::Detach { spawned_task, continuation: _ } => {
-                let target = self.llbb(spawned_task);
-                bx.br(target);
+            // FIXME(jhilton): for backends that don't support Tapir, we can merge successors.
+            mir::TerminatorKind::Detach { spawned_task, continuation } => {
+                let spawned_task = self.llbb(spawned_task);
+                if Bx::supports_tapir() {
+                    let continuation = self.llbb(continuation);
+                    bx.detach(spawned_task, continuation, self.sync_region());
+                } else {
+                    bx.br(spawned_task);
+                }
                 MergingSucc::False
             }
             mir::TerminatorKind::Reattach { continuation } => {
-                let target = self.llbb(continuation);
-                bx.br(target);
+                let continuation = self.llbb(continuation);
+                if Bx::supports_tapir() {
+                    bx.reattach(continuation, self.sync_region());
+                } else {
+                    bx.br(continuation);
+                }
                 MergingSucc::False
             }
             mir::TerminatorKind::Sync { target } => {
                 let target = self.llbb(target);
-                bx.br(target);
+                if Bx::supports_tapir() {
+                    bx.sync(target, self.sync_region());
+                } else {
+                    bx.br(target);
+                }
                 MergingSucc::False
             }
         }
