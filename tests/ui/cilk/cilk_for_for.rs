@@ -1,3 +1,5 @@
+// run-pass
+
 #![feature(cilk)]
 use std::time::Instant;
 fn main(){
