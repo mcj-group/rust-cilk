@@ -5,6 +5,7 @@ use rustc_index::IndexSlice;
 use rustc_index::{bit_set::BitSet, IndexVec};
 use rustc_middle::mir::{self, BasicBlock, Location};
 use smallvec::SmallVec;
+use rustc_middle::mir::TerminatorKind;
 
 use crate::fmt::DebugWithContext;
 
@@ -366,7 +367,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
 
                 _ => {
                     terminator.successors().for_each(|t| {
-                        if !builder.cleanup_blocks.contains(t) {
+                        if !builder.cleanup_blocks.contains(t) && (!builder.block_tasks.contains_key(&t) || body.basic_blocks[t].terminator().kind != TerminatorKind::Unreachable) {
                             // Same task.
                             builder.label_block_task(t, current_task);
                         }
