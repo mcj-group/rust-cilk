@@ -1,3 +1,5 @@
+// run-pass
+
 #![feature(cilk)]
 fn main(){
     nested_cilk_for();
