@@ -1,4 +1,20 @@
-//! Inlining pass for MIR functions.
+//! Inlining pass for MIR functions
+use crate::deref_separator::deref_finder;
+use rustc_attr::{InlineAttr, OrphaningAttr};
+use rustc_const_eval::transform::validate::validate_types;
+use rustc_hir::def::DefKind;
+use rustc_hir::def_id::DefId;
+use rustc_index::bit_set::BitSet;
+use rustc_index::Idx;
+use rustc_middle::middle::codegen_fn_attrs::{CodegenFnAttrFlags, CodegenFnAttrs};
+use rustc_middle::mir::visit::*;
+use rustc_middle::mir::*;
+use rustc_middle::ty::TypeVisitableExt;
+use rustc_middle::ty::{self, Instance, InstanceDef, ParamEnv, Ty, TyCtxt};
+use rustc_session::config::OptLevel;
+use rustc_span::source_map::Spanned;
+use rustc_target::abi::FieldIdx;
+use rustc_target::spec::abi::Abi;
 
 use std::iter;
 use std::ops::{Range, RangeFrom};
@@ -192,7 +208,56 @@ impl<'tcx> Inliner<'tcx> for ForceInliner<'tcx> {
         &self,
         callee_attrs: &CodegenFnAttrs,
     ) -> Result<(), &'static str> {
-        debug_assert_matches!(callee_attrs.inline, InlineAttr::Force { .. });
+        if let InlineAttr::Never = callee_attrs.inline {
+            return Err("never inline hint");
+        }
+
+        if let OrphaningAttr::Hint = callee_attrs.orphaning {
+            return Err("never inline orphaning function");
+        }
+
+        // Reachability pass defines which functions are eligible for inlining. Generally inlining
+        // other functions is incorrect because they could reference symbols that aren't exported.
+        let is_generic = callsite
+            .callee
+            .args
+            .non_erasable_generics(self.tcx, callsite.callee.def_id())
+            .next()
+            .is_some();
+        if !is_generic && !cross_crate_inlinable {
+            return Err("not exported");
+        }
+
+        if callsite.fn_sig.c_variadic() {
+            return Err("C variadic");
+        }
+
+        if callee_attrs.flags.contains(CodegenFnAttrFlags::COLD) {
+            return Err("cold");
+        }
+
+        if callee_attrs.no_sanitize != self.codegen_fn_attrs.no_sanitize {
+            return Err("incompatible sanitizer set");
+        }
+
+        // Two functions are compatible if the callee has no attribute (meaning
+        // that it's codegen agnostic), or sets an attribute that is identical
+        // to this function's attribute.
+        if callee_attrs.instruction_set.is_some()
+            && callee_attrs.instruction_set != self.codegen_fn_attrs.instruction_set
+        {
+            return Err("incompatible instruction set");
+        }
+
+        if callee_attrs.target_features != self.codegen_fn_attrs.target_features {
+            // In general it is not correct to inline a callee with target features that are a
+            // subset of the caller. This is because the callee might contain calls, and the ABI of
+            // those calls depends on the target features of the surrounding function. By moving a
+            // `Call` terminator from one MIR body to another with more target features, we might
+            // change the ABI of that call!
+            return Err("incompatible target features");
+        }
+
         Ok(())
     }
 
