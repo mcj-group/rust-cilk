@@ -9,7 +9,7 @@ use super::errors::{
 use super::ResolverAstLoweringExt;
 use super::{ImplTraitContext, LoweringContext, ParamMode, ParenthesizedGenericArgs};
 use crate::{FnDeclKind, ImplTraitPosition};
-use rustc_ast::mut_visit::{ReplaceVariable, MutVisitor};
+use rustc_ast::mut_visit::{MutVisitor, noop_visit_expr, visit_attrs, visit_lazy_tts};
 use rustc_ast::ptr::P as AstP;
 use rustc_ast::*;
 use rustc_data_structures::stack::ensure_sufficient_stack;
@@ -21,6 +21,52 @@ use rustc_span::symbol::{kw, sym, Ident, Symbol};
 use rustc_span::DUMMY_SP;
 use rustc_span::{DesugaringKind, Span};
 use thin_vec::{thin_vec, ThinVec};
+
+// ReplaceVariable handles the renaming of the induction variable in cilk_for loops
+pub struct ReplaceVariable<'hir> {
+    pub target_ident: Ident,
+    pub target_id: NodeId,
+    pub new_ident: Ident,
+    pub new_id: NodeId,
+    pub map_targets: &'hir mut Vec<NodeId>,
+}
+
+impl ReplaceVariable<'_> {
+    fn visit_path_2(&mut self, Path { segments, span, tokens: _ }: &mut Path, e: &mut NodeId) {
+        self.visit_span(span); 
+        for PathSegment { ident, id, args: _ } in segments {
+            if ident.name == self.target_ident.name {
+                *ident = self.new_ident;
+                *id = self.new_id;
+                self.map_targets.push(*e);
+            }
+            // self.visit_ident(ident);
+            // self.visit_id(id);
+            // self.visit_opt(args, |args| vis.visit_generic_args(args)); // TODO: maybe I need to visit the args
+        }
+        // visit_lazy_tts(tokens, vis); // TODO: maybe I need to visit the tokens
+    }
+}
+
+impl MutVisitor for ReplaceVariable<'_> {
+    fn visit_expr(&mut self, e: &mut AstP<Expr>) {
+        let e: &mut Expr = e;
+        let Expr { kind, id, span, attrs, tokens } = e;
+        if let ExprKind::Path(qself, path) = kind {
+            self.visit_qself(qself);
+
+            // difference from base implementation: calls visit_path_2 instead of visit_path
+            self.visit_path_2(path, id);
+
+            self.visit_id(id);
+            self.visit_span(span);
+            visit_attrs(attrs, self);
+            visit_lazy_tts(tokens, self);
+        } else {
+            noop_visit_expr(e, self);
+        }
+    }
+}
 
 impl<'hir> LoweringContext<'_, 'hir> {
     fn lower_exprs(&mut self, exprs: &[AstP<Expr>]) -> &'hir [hir::Expr<'hir>] {
