@@ -10,6 +10,8 @@ use rustc_middle::ty::{RegionVid, TyCtxt};
 use rustc_mir_dataflow::move_paths::MoveData;
 use std::fmt;
 use std::ops::Index;
+use smallvec::SmallVec;
+use rustc_middle::mir::{Terminator, TerminatorKind};
 
 pub struct BorrowSet<'tcx> {
     /// The fundamental map relating bitvector indexes to the borrows
@@ -123,6 +125,7 @@ impl<'tcx> BorrowSet<'tcx> {
         body: &Body<'tcx>,
         locals_are_invalidated_at_exit: bool,
         move_data: &MoveData<'tcx>,
+        sync_locations: SmallVec<[Location; 1]>,
     ) -> Self {
         let mut visitor = GatherBorrows {
             tcx,
@@ -136,6 +139,9 @@ impl<'tcx> BorrowSet<'tcx> {
                 body,
                 move_data,
             ),
+            sync_locations,
+            sync_region_stack: SmallVec::new(),
+            counter: 0,
         };
 
         for (block, block_data) in traversal::preorder(body) {
@@ -177,7 +183,9 @@ struct GatherBorrows<'a, 'tcx> {
     location_map: FxIndexMap<Location, BorrowData<'tcx>>,
     activation_map: FxIndexMap<Location, Vec<BorrowIndex>>,
     local_map: FxIndexMap<mir::Local, FxIndexSet<BorrowIndex>>,
-
+    sync_region_stack: SmallVec<[usize; 1]>,
+    counter: usize, // initialize this to 0
+    sync_locations: SmallVec<[Location; 1]>,
     /// When we encounter a 2-phase borrow statement, it will always
     /// be assigning into a temporary TEMP:
     ///
@@ -214,6 +222,15 @@ impl<'a, 'tcx> Visitor<'tcx> for GatherBorrows<'a, 'tcx> {
                 borrowed_place,
                 assigned_place: *assigned_place,
             };
+            let sr = self.sync_region_stack.pop();
+            if let Some (sr) = sr {
+                self.sync_region_stack.push(sr);
+                let sync_location = self.sync_locations[sr];
+                let (sync_idx, _) = self.location_map.insert_full(sync_location, borrow.clone());
+                let sync_idx = BorrowIndex::from(sync_idx);
+                self.local_map.entry(borrowed_place.local).or_default().insert(sync_idx);
+            }
+            
             let (idx, _) = self.location_map.insert_full(location, borrow);
             let idx = BorrowIndex::from(idx);
 
@@ -284,6 +301,27 @@ impl<'a, 'tcx> Visitor<'tcx> for GatherBorrows<'a, 'tcx> {
         }
 
         self.super_rvalue(rvalue, location)
+    }
+
+    fn visit_terminator(
+        &mut self,
+        terminator: &Terminator<'tcx>,
+        location: Location,
+    ) {
+        let Terminator { source_info: _, kind } = terminator;
+
+        match kind {
+            TerminatorKind::Detach { spawned_task: _, continuation: _ } => {
+                self.sync_region_stack.push(self.counter);
+                self.counter += 1;
+            } 
+            TerminatorKind::Sync { .. } => {
+                self.sync_region_stack.pop(); // make sure this removes and returns value
+            } 
+            _ => { 
+                self.super_terminator(terminator, location);
+            }
+        }
     }
 }
 

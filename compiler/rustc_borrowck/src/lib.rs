@@ -37,7 +37,7 @@ use rustc_mir_dataflow::task_info::TaskInfo;
 use rustc_session::lint::builtin::UNUSED_MUT;
 use rustc_span::{Span, Symbol};
 use rustc_target::abi::FieldIdx;
-
+use rustc_middle::mir::visit::Visitor;
 use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -138,6 +138,39 @@ fn mir_borrowck(tcx: TyCtxt<'_>, def: LocalDefId) -> &BorrowCheckResult<'_> {
     tcx.arena.alloc(opt_closure_req)
 }
 
+struct SyncLocationVisitor {
+    sync_region_stack: SmallVec<[usize; 1]>,
+    counter: usize,
+    locations: SmallVec<[Location; 1]>,
+}
+
+// create an initialization function which sets counter to 0
+
+impl<'tcx> Visitor<'tcx> for SyncLocationVisitor {
+    fn visit_terminator(
+        &mut self,
+        terminator: &Terminator<'tcx>,
+        location: Location,
+    ) {
+        let Terminator { source_info: _, kind } = terminator;
+
+        match kind {
+            TerminatorKind::Detach { spawned_task: _, continuation: _ } => {
+                self.sync_region_stack.push(self.counter);
+                self.locations.push(location);
+                self.counter += 1;
+            } 
+            TerminatorKind::Sync { .. } => {
+                let index = self.sync_region_stack.pop(); // make sure this removes and returns value
+                self.locations[index.expect("Expected a detach and sync region value before sync")] = location; 
+            } 
+            _ => { 
+                self.super_terminator(terminator, location);
+            }
+        }
+    }
+}
+
 /// Perform the actual borrow checking.
 ///
 /// Use `consumer_options: None` for the default behavior of returning
@@ -206,6 +239,9 @@ fn do_mir_borrowck<'tcx>(
     let task_info = TaskInfo::from_body(body);
     let maybe_synced_tasks = maybe_synced_tasks(tcx, body, &task_info);
 
+    let mut sync_location_visitor = SyncLocationVisitor{sync_region_stack: SmallVec::new(), counter: 0, locations: SmallVec::new()};
+    sync_location_visitor.visit_body(body);
+
     let mut flow_inits =
         MaybeInitializedPlaces::new(tcx, body, &mdpe, &task_info, &maybe_synced_tasks)
             .into_engine(tcx, body)
@@ -215,7 +251,7 @@ fn do_mir_borrowck<'tcx>(
 
     let locals_are_invalidated_at_exit = tcx.hir().body_owner_kind(def).is_fn_or_closure();
     let borrow_set =
-        Rc::new(BorrowSet::build(tcx, body, locals_are_invalidated_at_exit, &mdpe.move_data));
+        Rc::new(BorrowSet::build(tcx, body, locals_are_invalidated_at_exit, &mdpe.move_data, sync_location_visitor.locations));
 
     // Compute non-lexical lifetimes.
     let nll::NllOutput {
@@ -291,8 +327,6 @@ fn do_mir_borrowck<'tcx>(
     };
 
     for (idx, move_data) in promoted_move_data {
-        use rustc_middle::mir::visit::Visitor;
-
         let promoted_body = &promoted[idx];
         let mut promoted_mbcx = MirBorrowckCtxt {
             infcx: &infcx,
