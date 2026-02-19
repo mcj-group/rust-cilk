@@ -215,6 +215,7 @@ pub fn calculate_borrows_out_of_scope_at_location<'tcx>(
     regioncx: &RegionInferenceContext<'tcx>,
     borrow_set: &BorrowSet<'tcx>,
 ) -> FxIndexMap<Location, Vec<BorrowIndex>> {
+    debug!("calculate_borrows_out_of_scope_at_location");
     let mut prec = OutOfScopePrecomputer::new(body, regioncx);
     for (borrow_index, borrow_data) in borrow_set.iter_enumerated() {
         let borrow_region = borrow_data.region;
@@ -376,6 +377,7 @@ impl<'tcx> PoloniusOutOfScopePrecomputer<'_, 'tcx> {
             // Reachability is location-insensitive, and we could take advantage of that, by jumping
             // to a further point than just the next statement: we can jump to the furthest point
             // within the block where `r` is live.
+            debug!("CAIATHEN PoloniusOutOfScopePecomputer loan_kill_location");
             if self.regioncx.is_loan_live_at(loan_idx, location) {
                 continue;
             }

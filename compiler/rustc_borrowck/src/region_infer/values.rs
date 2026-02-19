@@ -205,6 +205,7 @@ impl LivenessValues {
 
     /// When using `-Zpolonius=next`, returns whether the `loan_idx` is live at the given `point`.
     pub(crate) fn is_loan_live_at(&self, loan_idx: BorrowIndex, point: PointIndex) -> bool {
+        debug!("CAIATHEN LivenessValues is_loan_live_at");
         self.loans
             .as_ref()
             .expect("Accessing live loans requires `-Zpolonius=next`")

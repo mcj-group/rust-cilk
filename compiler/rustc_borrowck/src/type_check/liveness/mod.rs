@@ -1,7 +1,7 @@
 use itertools::{Either, Itertools};
 use rustc_data_structures::fx::FxHashSet;
 use rustc_middle::mir::visit::{TyContext, Visitor};
-use rustc_middle::mir::{Body, Local, Location, SourceInfo};
+use rustc_middle::mir::{Body, Local, Location, SourceInfo, Terminator, TerminatorKind};
 use rustc_middle::ty::visit::TypeVisitable;
 use rustc_middle::ty::{GenericArgsRef, Region, RegionVid, Ty, TyCtxt};
 use rustc_mir_dataflow::impls::MaybeInitializedPlaces;
@@ -9,7 +9,7 @@ use rustc_mir_dataflow::move_paths::MoveData;
 use rustc_mir_dataflow::points::DenseLocationMap;
 use rustc_mir_dataflow::ResultsCursor;
 use std::rc::Rc;
-
+use smallvec::SmallVec;
 use crate::{
     constraints::OutlivesConstraintSet,
     facts::{AllFacts, AllFactsExt},
@@ -41,7 +41,7 @@ pub(super) fn generate<'mir, 'tcx>(
     location_table: &LocationTable,
     use_polonius: bool,
 ) {
-    debug!("liveness::generate");
+    debug!("hellooo liveness::generate");
 
     let free_regions = regions_that_outlive_free_regions(
         typeck.infcx.num_region_vars(),
@@ -151,9 +151,49 @@ fn record_regular_live_regions<'tcx>(
     liveness_constraints: &mut LivenessValues,
     body: &Body<'tcx>,
 ) {
-    let mut visitor = LiveVariablesVisitor { tcx, liveness_constraints };
+    let mut sync_location_visitor = SyncLocationVisitor{sync_region_stack: SmallVec::new(), counter: 0, locations: SmallVec::new()};
+    sync_location_visitor.visit_body(body);
+
+    let mut visitor = LiveVariablesVisitor { 
+        tcx, 
+        liveness_constraints, 
+        sync_locations: sync_location_visitor.locations,
+        sync_region_stack: SmallVec::new(),
+        counter: 0, 
+    };
     for (bb, data) in body.basic_blocks.iter_enumerated() {
         visitor.visit_basic_block_data(bb, data);
+    }
+}
+
+struct SyncLocationVisitor {
+    sync_region_stack: SmallVec<[usize; 1]>,
+    counter: usize,
+    locations: SmallVec<[Location; 1]>,
+}
+
+impl<'tcx> Visitor<'tcx> for SyncLocationVisitor {
+    fn visit_terminator(
+        &mut self,
+        terminator: &Terminator<'tcx>,
+        location: Location,
+    ) {
+        let Terminator { source_info: _, kind } = terminator;
+
+        match kind {
+            TerminatorKind::Detach { spawned_task: _, continuation: _ } => {
+                self.sync_region_stack.push(self.counter);
+                self.locations.push(location);
+                self.counter += 1;
+            } 
+            TerminatorKind::Sync { .. } => {
+                let index = self.sync_region_stack.pop(); // make sure this removes and returns value
+                self.locations[index.expect("Expected a detach and sync region value before sync")] = location; 
+            } 
+            _ => { 
+                self.super_terminator(terminator, location);
+            }
+        }
     }
 }
 
@@ -161,12 +201,16 @@ fn record_regular_live_regions<'tcx>(
 struct LiveVariablesVisitor<'cx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     liveness_constraints: &'cx mut LivenessValues,
+    sync_locations: SmallVec<[Location; 1]>,
+    sync_region_stack: SmallVec<[usize; 1]>,
+    counter: usize, // initialize this to 0
 }
 
 impl<'cx, 'tcx> Visitor<'tcx> for LiveVariablesVisitor<'cx, 'tcx> {
     /// We sometimes have `args` within an rvalue, or within a
     /// call. Make them live at the location where they appear.
     fn visit_args(&mut self, args: &GenericArgsRef<'tcx>, location: Location) {
+        debug!("CAIATHEN LiveVariablesVisitor visit_args");
         self.record_regions_live_at(*args, location);
         self.super_args(args);
     }
@@ -174,6 +218,14 @@ impl<'cx, 'tcx> Visitor<'tcx> for LiveVariablesVisitor<'cx, 'tcx> {
     /// We sometimes have `region`s within an rvalue, or within a
     /// call. Make them live at the location where they appear.
     fn visit_region(&mut self, region: Region<'tcx>, location: Location) {
+        debug!("CAIATHEN LiveVariablesVisitor visit_region");
+        let sr = self.sync_region_stack.pop();
+        if let Some (sr) = sr {
+            self.sync_region_stack.push(sr);
+            let sync_location = self.sync_locations[sr];
+            debug!("CAIATHEN LiveVariablesVisitor visit_region sync_location {:?} location {:?} region {:?}", sync_location, location, region);
+            self.record_regions_live_at(region, sync_location);
+        }
         self.record_regions_live_at(region, location);
         self.super_region(region);
     }
@@ -181,6 +233,7 @@ impl<'cx, 'tcx> Visitor<'tcx> for LiveVariablesVisitor<'cx, 'tcx> {
     /// We sometimes have `ty`s within an rvalue, or within a
     /// call. Make them live at the location where they appear.
     fn visit_ty(&mut self, ty: Ty<'tcx>, ty_context: TyContext) {
+        debug!("CAIATHEN LiveVariablesVisitor visit_ty");
         match ty_context {
             TyContext::ReturnTy(SourceInfo { span, .. })
             | TyContext::YieldTy(SourceInfo { span, .. })
@@ -195,6 +248,27 @@ impl<'cx, 'tcx> Visitor<'tcx> for LiveVariablesVisitor<'cx, 'tcx> {
         }
 
         self.super_ty(ty);
+    }
+    
+    fn visit_terminator(
+        &mut self,
+        terminator: &Terminator<'tcx>,
+        location: Location,
+    ) {
+        let Terminator { source_info: _, kind } = terminator;
+
+        match kind {
+            TerminatorKind::Detach { spawned_task: _, continuation: _ } => {
+                self.sync_region_stack.push(self.counter);
+                self.counter += 1;
+            } 
+            TerminatorKind::Sync { .. } => {
+                self.sync_region_stack.pop(); // make sure this removes and returns value
+            } 
+            _ => { 
+                self.super_terminator(terminator, location);
+            }
+        }
     }
 }
 
