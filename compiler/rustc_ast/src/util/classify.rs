@@ -207,6 +207,7 @@ pub fn expr_trailing_brace(mut expr: &ast::Expr) -> Option<TrailingBrace<'_>> {
             Cast(_, ty) => {
                 break type_trailing_braced_mac_call(ty).map(TrailingBrace::MacCall);
             }
+            | CilkSpawn(..)
 
             MacCall(mac) => {
                 break (mac.args.delim == Delimiter::Brace).then_some(TrailingBrace::MacCall(mac));
@@ -242,6 +243,7 @@ pub fn expr_trailing_brace(mut expr: &ast::Expr) -> Option<TrailingBrace<'_>> {
             | Dummy => {
                 break None;
             }
+            | CilkSync
         }
     }
 }
