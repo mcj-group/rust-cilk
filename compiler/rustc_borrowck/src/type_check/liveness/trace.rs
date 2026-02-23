@@ -51,8 +51,10 @@ pub(super) fn trace<'mir, 'tcx>(
 ) {
     let local_use_map = &LocalUseMap::build(&relevant_live_locals, elements, body);
 
+    debug!("CAIATHEN liveness::trace");
     // When using `-Zpolonius=next`, compute the set of loans that can reach a given region.
     if typeck.tcx().sess.opts.unstable_opts.polonius.is_next_enabled() {
+        debug!("CAIATHEN liveness::trace polonius");
         let borrowck_context = &mut typeck.borrowck_context;
         let borrow_set = &borrowck_context.borrow_set;
         let mut live_loans = LiveLoans::new(borrow_set.len());

@@ -331,6 +331,8 @@ impl<N: Idx> RegionValues<N> {
         let block = self.elements.entry_point(block);
         let start = block.plus(start);
         let end = block.plus(end);
+        debug!("CAIATHEN first_non_contained_inclusive block {:?} start {:?} end {:?} r {:?} row {:?}", block, start, end, r, row);
+        debug!("pretty print r {:?}", self.region_value_str(r));
         let first_unset = row.first_unset_in(start..=end)?;
         Some(first_unset.index() - block.index())
     }

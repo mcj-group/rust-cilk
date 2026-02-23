@@ -336,6 +336,11 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         debug!("outlives constraints: {:#?}", outlives_constraints);
         debug!("placeholder_indices: {:#?}", placeholder_indices);
         debug!("type tests: {:#?}", type_tests);
+        let regions = liveness_constraints.regions();
+        for r in regions{
+            let s = liveness_constraints.pretty_print_live_points(r);
+            debug!("CAIATHEN region {:?} live at {:?}", r, s);
+        }
 
         // Create a RegionDefinition for each inference variable.
         let definitions: IndexVec<_, _> = var_infos
@@ -355,6 +360,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         let mut scc_values =
             RegionValues::new(elements, universal_regions.len(), &placeholder_indices);
 
+        // merge LivenessValues into RegionValues
         for region in liveness_constraints.regions() {
             let scc = constraint_sccs.scc(region);
             scc_values.merge_liveness(scc, region, &liveness_constraints);
@@ -615,6 +621,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
         end: usize,
     ) -> Option<usize> {
         let scc = self.constraint_sccs.scc(r);
+        debug!("RegionInferenceContext region {:?} scc {:?} ", r, scc);
         self.scc_values.first_non_contained_inclusive(scc, block, start, end)
     }
 
