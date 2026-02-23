@@ -324,6 +324,15 @@ fn main() {}
     )
 }
 
+fn spawn_keyword() {
+    check_lexing(
+        r####"cilk_spawn"####,
+        expect![[r#"
+        Token { kind: Ident, len: 10 }
+    "#]],
+    )
+}
+
 #[test]
 fn frontmatter_disallowed() {
     check_lexing(
@@ -367,5 +376,66 @@ fn main() {}
             Token { kind: CloseBrace, len: 1 }
             Token { kind: Whitespace, len: 1 }
         "#]],
+    )
+}
+
+fn sync_keyword() {
+    check_lexing(
+        r####"cilk_sync"####,
+        expect![[r#"
+        Token { kind: Ident, len: 9 }
+    "#]],
+    )
+}
+
+#[test]
+fn lex_mini_fib() {
+    check_lexing(
+        r####"let x = cilk_spawn { fib(n - 1) }; let y = fib(n - 2); x + y"####,
+        expect![[r#"
+        Token { kind: Ident, len: 3 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Eq, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 10 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: OpenBrace, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 3 }
+        Token { kind: OpenParen, len: 1 }
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Minus, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Literal { kind: Int { base: Decimal, empty_int: false }, suffix_start: 1 }, len: 1 }
+        Token { kind: CloseParen, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: CloseBrace, len: 1 }
+        Token { kind: Semi, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 3 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Eq, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 3 }
+        Token { kind: OpenParen, len: 1 }
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Minus, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Literal { kind: Int { base: Decimal, empty_int: false }, suffix_start: 1 }, len: 1 }
+        Token { kind: CloseParen, len: 1 }
+        Token { kind: Semi, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Plus, len: 1 }
+        Token { kind: Whitespace, len: 1 }
+        Token { kind: Ident, len: 1 }
+    "#]],
     )
 }
