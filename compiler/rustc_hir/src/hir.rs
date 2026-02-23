@@ -2936,8 +2936,7 @@ pub enum ExprKind<'hir> {
     /// e.g. `unsafe<'a> &'a i32` <=> `&i32`.
     UnsafeBinderCast(UnsafeBinderCastKind, &'hir Expr<'hir>, Option<&'hir Ty<'hir>>),
     /// An expression that makes the right-hand side potentially parallel with the continuation.
-    // TODO(jhilton): should this be an Expr instead?
-    CilkSpawn(&'hir Block<'hir>),
+    CilkSpawn(&'hir Expr<'hir>),
 
     /// A suspension point for spawned tasks.
     CilkSync,

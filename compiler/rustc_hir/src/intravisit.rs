@@ -987,8 +987,8 @@ pub fn walk_generic_arg<'v, V: Visitor<'v>>(
             let InferArg { hir_id, span } = inf;
             visitor.visit_infer(*hir_id, *span, InferKind::Ambig(inf))
         }
-        ExprKind::CilkSpawn(block) => {
-            visitor.visit_block(block);
+        ExprKind::CilkSpawn(expr) => {
+            visitor.visit_expr(expr);
         }
         ExprKind::CilkSync => {}
     }
