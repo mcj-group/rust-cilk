@@ -1523,6 +1523,10 @@ impl<'a> Parser<'a> {
                         err
                     },
                 )
+            } else if this.eat_keyword(kw::CilkSpawn) {
+                // TODO(jhilton): cilk_spawn can also prefix a function call. We should figure out how to make that work, but for now it's
+                // fine to require all cilk exprs to be in a block I think.
+                this.parse_cilk_spawn_block()
             } else if this.check_inline_const(0) {
                 this.parse_const_block(lo, false)
             } else if this.may_recover() && this.is_do_catch_block() {
@@ -1538,6 +1542,10 @@ impl<'a> Parser<'a> {
                 this.parse_expr_break()
             } else if this.eat_keyword(exp!(Yield)) {
                 this.parse_expr_yield()
+            } else if this.eat_keyword(kw::CilkSync) {
+                // I think it's weird that cilk_sync is an expr but it means we can omit the semicolon,
+                // which has similarly rust-y vibes.
+                this.parse_expr_cilk_sync()
             } else if this.is_do_yeet() {
                 this.parse_expr_yeet()
             } else if this.eat_keyword(exp!(Become)) {
@@ -1975,6 +1983,13 @@ impl<'a> Parser<'a> {
         self.psess.gated_spans.gate(sym::yield_expr, span);
         let expr = self.mk_expr(span, kind);
         self.maybe_recover_from_bad_qpath(expr)
+    }
+
+    fn parse_expr_cilk_sync(&mut self) -> PResult<'a, P<Expr>> {
+        let lo = self.prev_token.span;
+        let kind = ExprKind::CilkSync;
+        // TODO(jhilton): we want to add feature gating to this after we get it to minimally work.
+        Ok(self.mk_expr(lo.to(self.prev_token.span), kind))
     }
 
     /// Parse `builtin # ident(args,*)`.
@@ -3640,6 +3655,16 @@ impl<'a> Parser<'a> {
             && self.look_ahead(2, |t| t == &token::Comma || t == &token::Colon)
     }
 
+    fn parse_cilk_spawn_block(&mut self) -> PResult<'a, P<Expr>> {
+        let lo = self.token.span;
+        let (attrs, body) = self.parse_inner_attrs_and_block().map_err(|mut err| {
+            err.span_label(lo, "while parsing this `cilk_spawn` expression");
+            err
+        })?;
+        let kind = ExprKind::CilkSpawn(body);
+        Ok(self.mk_expr_with_attrs(lo.to(self.prev_token.span), kind, attrs))
+    }
+
     fn maybe_parse_struct_expr(
         &mut self,
         qself: &Option<Box<ast::QSelf>>,
@@ -4323,6 +4348,9 @@ impl MutVisitor for CondChecker<'_> {
                 self.missing_let = missing_let;
                 self.comparison = comparison;
             }
+            ExprKind::CilkSpawn(ref _block) => {
+                todo!()
+            }
             ExprKind::Unary(_, _)
             | ExprKind::Await(_, _)
             | ExprKind::Use(_, _)
@@ -4380,8 +4408,8 @@ impl MutVisitor for CondChecker<'_> {
             | ExprKind::FormatArgs(_)
             | ExprKind::Err(_)
             | ExprKind::Dummy => {
-                // These would forbid any let expressions they contain already.
-            }
+            // CilkSync can't contain any expressions.
+            | ExprKind::CilkSync
         }
         self.depth -= 1;
     }

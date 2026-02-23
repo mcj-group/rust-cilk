@@ -40,6 +40,9 @@ symbols! {
         Underscore:         "_",
         // tidy-alphabetical-end
 
+        // TODO(jhilton): do spawn and sync make sense as unstable keywords? At some point they should
+        //  probably become stable keywords.
+
         // Keywords that are used in stable Rust.
         // Matching predicates: `is_used_keyword_always`/`is_reserved`
         // tidy-alphabetical-start
@@ -86,6 +89,8 @@ symbols! {
         Abstract:           "abstract",
         Become:             "become",
         Box:                "box",
+        CilkSpawn:          "cilk_spawn",
+        CilkSync:           "cilk_sync",
         Do:                 "do",
         Final:              "final",
         Macro:              "macro",

@@ -1823,6 +1823,10 @@ pub enum ExprKind {
     /// semantics and syntax would be needed to put it on stabilization-track.
     TryBlock(Box<Block>, Option<Box<Ty>>),
 
+    /// A cilk_spawn block (`cilk_spawn { ... }`).
+    // TODO(jhilton): we might be able to generalize this by making this accept a P<Expr> instead.
+    CilkSpawn(P<Block>),
+
     /// An assignment (`a = foo()`).
     /// The `Span` argument is the span of the `=` token.
     Assign(Box<Expr>, Box<Expr>, Span),
@@ -1913,6 +1917,9 @@ pub enum ExprKind {
     FormatArgs(Box<FormatArgs>),
 
     UnsafeBinderCast(UnsafeBinderCastKind, Box<Expr>, Option<Box<Ty>>),
+
+    /// A cilk_sync expression. Always evaluates to ().
+    CilkSync,
 
     /// Placeholder for an expression that wasn't syntactically well formed in some way.
     Err(ErrorGuaranteed),
