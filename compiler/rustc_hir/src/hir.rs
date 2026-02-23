@@ -2479,6 +2479,9 @@ impl Expr<'_> {
             // but we need to print `(let _ = a) < b` as-is with parens.
             | ExprKind::Let(..)
             | ExprKind::Unary(..) => ExprPrecedence::Prefix,
+            
+            ExprKind::CilkSpawn(..) => ExprPrecedence::CilkSpawn,
+            ExprKind::CilkSync => ExprPrecedence::CilkSync,
 
             // Need parens if and only if there are prefix attributes.
             ExprKind::Array(_)
@@ -2575,6 +2578,8 @@ impl Expr<'_> {
             | ExprKind::Binary(..)
             | ExprKind::Yield(..)
             | ExprKind::Cast(..)
+            | ExprKind::CilkSpawn(..)
+            | ExprKind::CilkSync
             | ExprKind::DropTemps(..) => false,
         }
     }
@@ -2690,6 +2695,8 @@ impl Expr<'_> {
             | ExprKind::ConstBlock(..)
             | ExprKind::Yield(..)
             | ExprKind::DropTemps(..)
+            | ExprKind::CilkSpawn(..)
+            | ExprKind::CilkSync
             | ExprKind::Err(_) => true,
         }
     }
@@ -2928,6 +2935,12 @@ pub enum ExprKind<'hir> {
     /// Operators which can be used to interconvert `unsafe` binder types.
     /// e.g. `unsafe<'a> &'a i32` <=> `&i32`.
     UnsafeBinderCast(UnsafeBinderCastKind, &'hir Expr<'hir>, Option<&'hir Ty<'hir>>),
+    /// An expression that makes the right-hand side potentially parallel with the continuation.
+    // TODO(jhilton): should this be an Expr instead?
+    CilkSpawn(&'hir Block<'hir>),
+
+    /// A suspension point for spawned tasks.
+    CilkSync,
 
     /// A placeholder for an expression that wasn't syntactically well formed in some way.
     Err(rustc_span::ErrorGuaranteed),

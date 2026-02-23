@@ -380,7 +380,9 @@ impl<'v> hir_visit::Visitor<'v> for StatCollector<'v> {
                 Repeat,
                 Yield,
                 UnsafeBinderCast,
-                Err
+                Err,
+                CilkSpawn,
+                CilkSync,
             ]
         );
         hir_visit::walk_expr(self, e)
