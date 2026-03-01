@@ -202,13 +202,13 @@ pub fn expr_trailing_brace(mut expr: &ast::Expr) -> Option<TrailingBrace<'_>> {
             | Struct(..)
             | TryBlock(..)
             | While(..)
+            | CilkSpawn(..)
+            | CilkScope(..)
             | ConstBlock(_) => break Some(TrailingBrace::Expr(expr)),
 
             Cast(_, ty) => {
                 break type_trailing_braced_mac_call(ty).map(TrailingBrace::MacCall);
             }
-            | CilkSpawn(..)
-            | CilkScope(..) => break Some(expr),
 
             MacCall(mac) => {
                 break (mac.args.delim == Delimiter::Brace).then_some(TrailingBrace::MacCall(mac));
@@ -241,10 +241,10 @@ pub fn expr_trailing_brace(mut expr: &ast::Expr) -> Option<TrailingBrace<'_>> {
             | Yeet(None)
             | UnsafeBinderCast(..)
             | Err(_)
+            | CilkSync
             | Dummy => {
                 break None;
             }
-            | CilkSync
         }
     }
 }

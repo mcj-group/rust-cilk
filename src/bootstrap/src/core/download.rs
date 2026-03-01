@@ -369,11 +369,10 @@ impl Config {
                 &format!("{base}/{llvm_sha}/{filename}"),
                 &tarball,
                 help_on_error,
-                false,
             );
         }
         let llvm_root = self.ci_llvm_root();
-        self.unpack_xz(&tarball, &llvm_root, "rust-dev");
+        self.unpack(&tarball, &llvm_root, "rust-dev");
     }
 
     // FIXME(jhilton): I think we shouldn't care about this as long as our runtime file detection is relative to llvm-config.
@@ -388,7 +387,7 @@ impl Config {
         self.maybe_download_opencilk_component(
             url,
             destination,
-            Path::new("cheetah-1-dev-darwin-bitcode-multiple-arch"),
+            "cheetah-1-dev-darwin-bitcode-multiple-arch",
         );
     }
 
@@ -398,11 +397,11 @@ impl Config {
         self.maybe_download_opencilk_component(
             url,
             destination,
-            Path::new("productivity-tools-dev"),
+            "productivity-tools-dev",
         );
     }
 
-    fn maybe_download_opencilk_component(&self, url: &str, destination: &Path, prefix: &Path) {
+    fn maybe_download_opencilk_component(&self, url: &str, destination: &Path, prefix: &str) {
         if destination.exists() {
             return;
         }
@@ -410,7 +409,7 @@ impl Config {
         self.download_opencilk_component(url, destination, prefix);
     }
 
-    fn download_opencilk_component(&self, url: &str, destination: &Path, prefix: &Path) {
+    fn download_opencilk_component(&self, url: &str, destination: &Path, prefix: &str) {
         if self.dry_run() {
             return;
         }
@@ -424,10 +423,10 @@ impl Config {
         }
         let tarball = rustc_cache.join(&file_name);
         if !tarball.exists() {
-            self.download_file(url, &tarball, "", true);
+            self.download_file(url, &tarball, "");
         }
         // Now the component is at tarball, we have to unpack it into the destination.
-        self.unpack_gzip(&tarball, &destination, prefix);
+        self.unpack(&tarball, &destination, prefix);
     }
 
     pub fn download_ci_gcc(&self, gcc_sha: &str, root_dir: &Path) {

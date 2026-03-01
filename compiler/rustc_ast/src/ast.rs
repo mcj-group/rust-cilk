@@ -1825,10 +1825,10 @@ pub enum ExprKind {
 
     /// A cilk_spawn block (`cilk_spawn { ... }`).
     // FIXME(jhilton): we might be able to generalize this by making this accept a P<Expr> instead.
-    CilkSpawn(P<Block>),
+    CilkSpawn(Box<Block>),
 
     /// A cilk_scope block (`cilk_scope { ... }`).
-    CilkScope(P<Block>),
+    CilkScope(Box<Block>),
 
     /// An assignment (`a = foo()`).
     /// The `Span` argument is the span of the `=` token.
