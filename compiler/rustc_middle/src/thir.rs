@@ -556,6 +556,7 @@ pub enum ExprKind<'tcx> {
         block: BlockId,
     },
     CilkSync,
+    Reattach,
 }
 
 /// Represents the association of a field identifier and an expression.

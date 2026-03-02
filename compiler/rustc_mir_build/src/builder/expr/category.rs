@@ -93,7 +93,8 @@ impl Category {
             | ExprKind::Continue { .. }
             | ExprKind::ConstContinue { .. }
             | ExprKind::Return { .. }
-            | ExprKind::Become { .. } =>
+            | ExprKind::Become { .. }
+            | ExprKind::Reattach =>
             // FIXME(#27840) these probably want their own
             // category, like "nonterminating"
             {

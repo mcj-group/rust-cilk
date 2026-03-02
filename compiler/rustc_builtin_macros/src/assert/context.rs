@@ -330,6 +330,7 @@ impl<'cx, 'a> Context<'cx, 'a> {
             | ExprKind::CilkScope(..)
             // We don't bother supporting nice asserts for cilk_sync because it always evaluates to unit.
             | ExprKind::CilkSync
+            | ExprKind::Reattach
             | ExprKind::UnsafeBinderCast(..) => {}
         }
     }

@@ -3,10 +3,12 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use rustc_ast::*;
+use rustc_ast::mut_visit::MutVisitor;
 use rustc_ast_pretty::pprust::expr_to_string;
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_errors::msg;
 use rustc_hir as hir;
+use rustc_errors::DiagCtxtHandle;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::definitions::DefPathData;
 use rustc_hir::{HirId, Target, find_attr};
@@ -16,21 +18,19 @@ use rustc_session::errors::report_lit_error;
 use rustc_span::source_map::{Spanned, respan};
 use rustc_span::{ByteSymbol, DUMMY_SP, DesugaringKind, Ident, Span, Symbol, sym};
 use thin_vec::{ThinVec, thin_vec};
-use rustc_ast::mut_visit::MutVisitor;
 use visit::{Visitor, walk_expr};
 
 use super::errors::{
     AsyncCoroutinesNotSupported, AwaitOnlyInAsyncFnAndBlocks, ClosureCannotBeStatic,
     CoroutineTooManyParameters, FunctionalRecordUpdateDestructuringAssignment,
     InclusiveRangeWithNoEnd, MatchArmWithNoBody, NeverPatternWithBody, NeverPatternWithGuard,
-    UnderscoreExprLhsAssign,
+    UnderscoreExprLhsAssign, BadControlFlowInCilkFor
 };
 use super::{
     GenericArgsMode, ImplTraitContext, LoweringContext, ParamMode, ResolverAstLoweringExt,
 };
 use crate::errors::{InvalidLegacyConstGenericArg, UseConstGenericArg, YieldInClosure};
 use crate::{AllowReturnTypeNotation, FnDeclKind, ImplTraitPosition, TryBlockScope};
-use crate::mut_visit::ReplaceVariable;
 
 struct WillCreateDefIdsVisitor {}
 
@@ -52,6 +52,65 @@ impl<'v> rustc_ast::visit::Visitor<'v> for WillCreateDefIdsVisitor {
             }
             _ => walk_expr(self, ex),
         }
+    }
+}
+
+struct ReplaceVariable<'hir> {
+    target_ident: Ident,
+    new_ident: Ident,
+    new_id: NodeId,
+    map_targets: &'hir mut Vec<NodeId>,
+}
+
+impl ReplaceVariable<'_> {
+    fn visit_path_replace(&mut self, Path { segments, span, tokens: _ }: &mut Path, e: &mut NodeId) {
+        self.visit_span(span);
+        for PathSegment { ident, id, args: _ } in segments {
+            if ident.name == self.target_ident.name {
+                *ident = self.new_ident;
+                *id = self.new_id;
+                self.map_targets.push(*e);
+            }
+        }
+    }
+}
+
+impl MutVisitor for ReplaceVariable<'_> {
+    fn visit_expr(&mut self, e: &mut Expr) {
+        let mut expr_id = e.id;
+        if let ExprKind::Path(qself, path) = &mut e.kind {
+            if let Some(qs) = qself {
+                self.visit_qself(&mut **qs);
+            }
+            self.visit_path_replace(path, &mut expr_id);
+        } else {
+            mut_visit::walk_expr(self, e);
+        }
+    }
+}
+
+// For handling break, continue, and return statements inside cilk_for statements
+struct CilkControlFlow<'a> {
+    // is_cilk_for: bool,
+    dcx: &'a DiagCtxtHandle<'a>,
+}
+
+impl MutVisitor for CilkControlFlow<'_> {
+    fn visit_expr(&mut self, e: &mut Expr) {
+        let Expr { kind, span, .. } = e;
+        match kind {
+            // todo: check break label
+            ExprKind::Break(_, _) => { 
+                *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("break") }));
+            },
+            ExprKind::Continue(_) => {
+                *kind = ExprKind::Reattach;
+            },
+            ExprKind::Ret(_) => {
+                *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("return") }));
+            },
+            _ => mut_visit::walk_expr(self, e),
+        };    
     }
 }
 
@@ -342,6 +401,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir::ExprKind::CilkScope(self.arena.alloc(block))
                 }
                 ExprKind::CilkSync => hir::ExprKind::CilkSync,
+                ExprKind::Reattach => hir::ExprKind::Reattach,
                 ExprKind::InlineAsm(asm) => {
                     hir::ExprKind::InlineAsm(self.lower_inline_asm(e.span, asm))
                 }
@@ -1917,18 +1977,22 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let mut body_clone: Box<Block> = body.clone();
                 let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
-                let mut visitor = ReplaceVariable{
+                let mut var_visitor = ReplaceVariable{
                     target_ident: induction_var_ident,
-                    target_id: ast_pat.id,
                     new_ident: shadow_ident,
                     new_id: shadow_path_seg_id,
                     map_targets: &mut map_targets
                 };
                 // visit body block
-                visitor.visit_block(&mut body_clone);
+                var_visitor.visit_block(&mut body_clone);
                 for node_id in &map_targets{
                     self.resolver.partial_res_map.insert(*node_id, shadow_res);
                 }
+
+                let mut cf_visitor = CilkControlFlow {
+                    dcx: &self.dcx(),
+                };
+                cf_visitor.visit_block(&mut body_clone);
 
                 let body_block = self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
                 // let body_block = self.lower_block(&*body_clone, false);

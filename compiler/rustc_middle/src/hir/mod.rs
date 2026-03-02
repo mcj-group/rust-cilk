@@ -310,6 +310,7 @@ impl<'tcx> TyCtxt<'tcx> {
                     | ExprKind::Continue(_)
                     | ExprKind::OffsetOf(_, _)
                     | ExprKind::CilkSync
+                    | ExprKind::Reattach
                     | ExprKind::Err(_) => unreachable!("no sub-expr expected for {:?}", expr.kind),
                 }
             }

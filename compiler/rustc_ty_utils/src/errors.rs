@@ -75,6 +75,8 @@ pub(crate) enum GenericConstantTooComplexSub {
     CilkScopeNotSupported(#[primary_span] Span),
     #[label("cilk_sync is not supported in generic constants")]
     CilkSyncNotSupported(#[primary_span] Span),
+    #[label("reattach is not supported in generic constants")]
+    ReattachNotSupported(#[primary_span] Span),
 }
 
 #[derive(Diagnostic)]

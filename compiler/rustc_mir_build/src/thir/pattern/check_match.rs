@@ -330,7 +330,8 @@ impl<'p, 'tcx> MatchVisitor<'p, 'tcx> {
             | Break { .. }
             | Continue { .. }
             | ConstContinue { .. }
-            | Return { .. } => true,
+            | Return { .. }
+            | Reattach => true,
 
             // These are statements that evaluate to `()`.
             Assign { .. } | AssignOp { .. } | InlineAsm { .. } | Let { .. } | CilkSync => true,

@@ -206,6 +206,7 @@ fn recurse_build<'tcx>(
             error(GenericConstantTooComplexSub::CilkScopeNotSupported(node.span))?
         }
         ExprKind::CilkSync => error(GenericConstantTooComplexSub::CilkSyncNotSupported(node.span))?,
+        ExprKind::Reattach => error(GenericConstantTooComplexSub::ReattachNotSupported(node.span))?,
 
         // we dont permit let stmts so `VarRef` and `UpvarRef` cant happen
         ExprKind::VarRef { .. }
@@ -313,7 +314,8 @@ impl<'a, 'tcx> IsThirPolymorphic<'a, 'tcx> {
             | thir::ExprKind::Yield { .. }
             | thir::ExprKind::CilkSpawn { .. }
             | thir::ExprKind::CilkScope { .. }
-            | thir::ExprKind::CilkSync => false,
+            | thir::ExprKind::CilkSync
+            | thir::ExprKind::Reattach => false,
         }
     }
     fn pat_is_poly(&mut self, pat: &thir::Pat<'tcx>) -> bool {
