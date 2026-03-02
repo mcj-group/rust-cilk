@@ -811,6 +811,7 @@ impl<'tcx> Cx<'tcx> {
                 ExprKind::CilkScope { block: self.mirror_block(block) }
             }
             hir::ExprKind::CilkSync => ExprKind::CilkSync,
+            hir::ExprKind::Reattach => ExprKind::Reattach,
             hir::ExprKind::Err(_) => unreachable!("cannot lower a `hir::ExprKind::Err` to THIR"),
         };
 

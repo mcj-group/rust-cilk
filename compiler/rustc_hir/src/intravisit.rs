@@ -811,7 +811,7 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr<'v>) 
         ExprKind::CilkScope(block) => {
             visitor.visit_block(block);
         }
-        ExprKind::CilkSync | ExprKind::Lit(_) | ExprKind::Err(_) => {}
+        ExprKind::CilkSync | ExprKind::Reattach | ExprKind::Lit(_) | ExprKind::Err(_) => {}
     }
 }
 

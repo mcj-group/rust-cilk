@@ -158,3 +158,5 @@ ast_lowering_underscore_expr_lhs_assign =
     .label = `_` not allowed here
 
 ast_lowering_use_angle_brackets = use angle brackets instead
+
+ast_lowering_bad_cf_cilk_for = cannot use `{$keyword}` within cilk_for

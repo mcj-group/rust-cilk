@@ -449,6 +449,7 @@ impl<'tcx> Visitor<'tcx> for IrMaps<'tcx> {
             | hir::ExprKind::CilkSpawn(..)
             | hir::ExprKind::CilkScope(..)
             | hir::ExprKind::CilkSync
+            | hir::ExprKind::Reattach
             | hir::ExprKind::Err(_)
             | hir::ExprKind::Path(hir::QPath::TypeRelative(..))
             | hir::ExprKind::Path(hir::QPath::LangItem(..)) => {}
@@ -1121,6 +1122,7 @@ impl<'a, 'tcx> Liveness<'a, 'tcx> {
             | hir::ExprKind::Path(hir::QPath::TypeRelative(..))
             | hir::ExprKind::Path(hir::QPath::LangItem(..))
             | hir::ExprKind::CilkSync
+            | hir::ExprKind::Reattach
             | hir::ExprKind::OffsetOf(..) => succ,
 
             // Note that labels have been resolved, so we don't need to look
@@ -1416,6 +1418,7 @@ fn check_expr<'tcx>(this: &mut Liveness<'_, 'tcx>, expr: &'tcx Expr<'tcx>) {
         | hir::ExprKind::CilkSpawn(..)
         | hir::ExprKind::CilkScope(..)
         | hir::ExprKind::CilkSync
+        | hir::ExprKind::Reattach
         | hir::ExprKind::Err(_) => {}
     }
 }

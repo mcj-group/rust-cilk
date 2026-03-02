@@ -1299,6 +1299,7 @@ impl Expr {
             ExprKind::CilkSpawn(..) => ExprPrecedence::CilkSpawn,
             ExprKind::CilkSync => ExprPrecedence::CilkSync,
             ExprKind::CilkScope(..) => ExprPrecedence::CilkScope,
+            ExprKind::Reattach => ExprPrecedence::Reattach,
             ExprKind::Err => ExprPrecedence::Err,
         }
     }
@@ -1542,6 +1543,9 @@ pub enum ExprKind {
 
     /// A cilk_sync expression. Always evaluates to ().
     CilkSync,
+
+    /// A reattach statement. Never explicitly added by the programmer, used to prematurely end a task body.
+    Reattach,
 
     /// Placeholder for an expression that wasn't syntactically well formed in some way.
     Err,

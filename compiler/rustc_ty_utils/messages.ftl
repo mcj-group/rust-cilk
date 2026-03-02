@@ -20,6 +20,8 @@ ty_utils_cilk_spawn_not_supported = cilk_spawn is not supported in generic const
 
 ty_utils_cilk_sync_not_supported = cilk_sync is not supported in generic constants
 
+ty_utils_reattach_not_supported = reattach is not supported in generic constants
+
 ty_utils_closure_and_return_not_supported = closures and function keywords are not supported in generic constants
 
 ty_utils_const_block_not_supported = const blocks are not supported in generic constants

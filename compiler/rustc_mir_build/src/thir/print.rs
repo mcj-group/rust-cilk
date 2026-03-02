@@ -553,6 +553,9 @@ impl<'a, 'tcx> ThirPrinter<'a, 'tcx> {
             CilkSync => {
                 print_indented!(self, "CilkSync", depth_lvl);
             }
+            Reattach => {
+                print_indented!(self, "Reattach", depth_lvl);
+            }
         }
     }
 

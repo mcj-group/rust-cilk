@@ -38,6 +38,16 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         }
 
         let block_and = match expr.kind {
+            ExprKind::Reattach => {
+                let reattach_block = *this.scopes.reattach_targets.last().unwrap();
+                this.cfg.goto(
+                    block,
+                    source_info,
+                    reattach_block,
+                );
+
+                this.cfg.start_new_block().unit()
+            }
             ExprKind::Scope { region_scope, lint_level, value } => {
                 let region_scope = (region_scope, source_info);
                 ensure_sufficient_stack(|| {
@@ -593,28 +603,39 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // being the spawned computation and the right being the continuation (which we'll return since we want the cursor to modify it.)
                 let mut spawned_task = this.cfg.start_new_block();
                 let continuation = this.cfg.start_new_block();
+                
+                // block that just reattaches
+                // multiple blocks can branch to it instead of having more than one reattach
+                let reattach_block = this.cfg.start_new_block();
 
                 this.cfg.terminate(
                     block,
                     source_info,
                     TerminatorKind::Detach { spawned_task, continuation },
                 );
+
+                // TODO: using reattach targets just as a stack like this might not work
+                // might need to treat it like breakable_scopes
+                this.scopes.reattach_targets.push(reattach_block);
                 // NOTE(jhilton): [as_local_rvalue] should be reasonable here. We're essentially constructing a
                 // temporary that gets immediately stored into the reserved place. The lowering-to-MIR for Assign
                 // does the same thing.
                 let spawned_result =
                     unpack!(spawned_task = this.as_local_rvalue(spawned_task, computation));
+                this.scopes.reattach_targets.pop();
 
                 // Store the result into the reserved destination for the spawn result.
                 this.cfg.push_assign(spawned_task, source_info, destination, spawned_result);
 
                 let task_span = this.thir[computation].span;
                 let task_source_info = this.source_info(task_span);
-                this.cfg.terminate(
+                this.cfg.goto(
                     spawned_task,
                     task_source_info,
-                    TerminatorKind::Reattach { continuation },
+                    reattach_block,
                 );
+                // TODO: not sure what to put here for source_info
+                this.cfg.terminate(reattach_block, task_source_info, TerminatorKind::Reattach { continuation });
 
                 block = continuation;
                 block.unit()

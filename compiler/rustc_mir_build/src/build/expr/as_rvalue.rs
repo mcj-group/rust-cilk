@@ -540,7 +540,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             | ExprKind::ValueTypeAscription { .. }
             | ExprKind::CilkSpawn { .. }
             | ExprKind::CilkScope { .. }
-            | ExprKind::CilkSync => {
+            | ExprKind::CilkSync
+            | ExprKind::Reattach => {
                 // these do not have corresponding `Rvalue` variants,
                 // so make an operand and then return that
                 debug_assert!(!matches!(

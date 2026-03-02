@@ -377,6 +377,7 @@ impl<'a, 'tcx> MemCategorizationContext<'a, 'tcx> {
             | hir::ExprKind::CilkSpawn(..)
             | hir::ExprKind::CilkScope(..)
             | hir::ExprKind::CilkSync
+            | hir::ExprKind::Reattach
             | hir::ExprKind::Err(_) => Ok(self.cat_rvalue(expr.hir_id, expr_ty)),
         }
     }

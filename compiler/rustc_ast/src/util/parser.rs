@@ -285,6 +285,7 @@ pub enum ExprPrecedence {
     Match,
     CilkSpawn,
     CilkScope,
+    Reattach,
     ConstBlock,
     Block,
     TryBlock,
@@ -305,7 +306,8 @@ impl ExprPrecedence {
             | ExprPrecedence::Yield
             | ExprPrecedence::Yeet
             | ExprPrecedence::Become
-            | ExprPrecedence::CilkSync => PREC_JUMP,
+            | ExprPrecedence::CilkSync
+            | ExprPrecedence::Reattach => PREC_JUMP,
 
             // `Range` claims to have higher precedence than `Assign`, but `x .. x = x` fails to
             // parse, instead of parsing as `(x .. x) = x`. Giving `Range` a lower precedence

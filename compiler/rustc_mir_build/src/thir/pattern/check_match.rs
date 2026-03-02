@@ -331,7 +331,7 @@ impl<'p, 'tcx> MatchVisitor<'p, 'tcx> {
             }
 
             // These diverge.
-            Become { .. } | Break { .. } | Continue { .. } | Return { .. } => true,
+            Become { .. } | Break { .. } | Continue { .. } | Return { .. } | Reattach => true,
 
             // These are statements that evaluate to `()`.
             Assign { .. } | AssignOp { .. } | InlineAsm { .. } | Let { .. } | CilkSync => true,

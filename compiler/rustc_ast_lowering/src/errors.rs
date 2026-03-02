@@ -400,3 +400,11 @@ pub(crate) struct AsyncBoundOnlyForFnTraits {
     #[primary_span]
     pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[diag(ast_lowering_bad_cf_cilk_for)]
+pub(crate) struct BadControlFlowInCilkFor {
+    #[primary_span]
+    pub span: Span,
+    pub keyword: String,
+}

@@ -4032,6 +4032,7 @@ impl MutVisitor for CondChecker<'_> {
             | ExprKind::FormatArgs(_)
             // CilkSync can't contain any expressions.
             | ExprKind::CilkSync
+            | ExprKind::Reattach
             | ExprKind::Err => {
                 // These would forbid any let expressions they contain already.
             }

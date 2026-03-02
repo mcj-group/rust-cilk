@@ -1523,7 +1523,7 @@ pub fn noop_visit_expr<T: MutVisitor>(
         ExprKind::TryBlock(body) => vis.visit_block(body),
         ExprKind::CilkSpawn(body) => vis.visit_block(body),
         ExprKind::CilkScope(body) => vis.visit_block(body),
-        ExprKind::Lit(_) | ExprKind::IncludedBytes(..) | ExprKind::CilkSync | ExprKind::Err => {}
+        ExprKind::Lit(_) | ExprKind::IncludedBytes(..) | ExprKind::CilkSync | ExprKind::Reattach | ExprKind::Err => {}
     }
     vis.visit_id(id);
     vis.visit_span(span);

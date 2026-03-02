@@ -4,7 +4,7 @@ use super::errors::{
     AsyncCoroutinesNotSupported, AwaitOnlyInAsyncFnAndBlocks, BaseExpressionDoubleDot,
     ClosureCannotBeStatic, CoroutineTooManyParameters,
     FunctionalRecordUpdateDestructuringAssignment, InclusiveRangeWithNoEnd, MatchArmWithNoBody,
-    NeverPatternWithBody, NeverPatternWithGuard, UnderscoreExprLhsAssign,
+    NeverPatternWithBody, NeverPatternWithGuard, UnderscoreExprLhsAssign, BadControlFlowInCilkFor
 };
 use super::ResolverAstLoweringExt;
 use super::{ImplTraitContext, LoweringContext, ParamMode, ParenthesizedGenericArgs};
@@ -13,6 +13,7 @@ use rustc_ast::mut_visit::{MutVisitor, noop_visit_expr, visit_attrs, visit_lazy_
 use rustc_ast::ptr::P as AstP;
 use rustc_ast::*;
 use rustc_data_structures::stack::ensure_sufficient_stack;
+use rustc_errors::DiagCtxt;
 use rustc_hir::{self as hir};
 use rustc_hir::def::{DefKind, Res};
 use rustc_session::errors::report_lit_error;
@@ -65,6 +66,34 @@ impl MutVisitor for ReplaceVariable<'_> {
         } else {
             noop_visit_expr(e, self);
         }
+    }
+}
+
+// For handling break, continue, and return statements inside cilk_for statements
+pub struct CilkControlFlow<'a> {
+    // is_cilk_for: bool,
+    dcx: &'a DiagCtxt,
+}
+
+impl MutVisitor for CilkControlFlow<'_> {
+    fn visit_expr(&mut self, e: &mut AstP<Expr>) {
+        let e: &mut Expr = e;
+        let Expr { kind, span, .. } = e;
+        match kind {
+            // todo: check break label
+            ExprKind::Break(_, _) => { 
+                self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("break") });
+                *kind = ExprKind::Err;
+            },
+            ExprKind::Continue(_) => {
+                *kind = ExprKind::Reattach;
+            },
+            ExprKind::Ret(_) => {
+                self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("return") });
+                *kind = ExprKind::Err;
+            },
+            _ => noop_visit_expr(e, self),
+        };    
     }
 }
 
@@ -347,6 +376,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir::ExprKind::CilkScope(self.arena.alloc(block))
                 }
                 ExprKind::CilkSync => hir::ExprKind::CilkSync,
+                ExprKind::Reattach => hir::ExprKind::Reattach,
                 ExprKind::InlineAsm(asm) => {
                     hir::ExprKind::InlineAsm(self.lower_inline_asm(e.span, asm))
                 }
@@ -1737,7 +1767,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let mut body_clone: AstP<Block> = body.clone();
                 let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
-                let mut visitor = ReplaceVariable{
+                let mut var_visitor = ReplaceVariable{
                     target_ident: induction_var_ident,
                     target_id: ast_pat.id,
                     new_ident: shadow_ident,
@@ -1745,10 +1775,15 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     map_targets: &mut map_targets
                 };
                 // visit body block
-                visitor.visit_block(&mut body_clone);
+                var_visitor.visit_block(&mut body_clone);
                 for node_id in &map_targets{
                     self.resolver.partial_res_map.insert(*node_id, shadow_res);
                 }
+
+                let mut cf_visitor = CilkControlFlow {
+                    dcx: self.dcx(),
+                };
+                cf_visitor.visit_block(&mut body_clone);
 
                 let body_block = self.with_loop_scope(e.id, |this| this.lower_block(&*body_clone, false));
                 // let body_block = self.lower_block(&*body_clone, false);

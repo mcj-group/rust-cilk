@@ -210,6 +210,7 @@ impl<'tcx> CheckInlineAssembly<'tcx> {
             | ExprKind::CilkSpawn(..)
             | ExprKind::CilkScope(..)
             | ExprKind::CilkSync
+            | ExprKind::Reattach
             | ExprKind::Yield(..) => {
                 self.items.push((ItemKind::NonAsm, span));
             }

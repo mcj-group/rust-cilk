@@ -1600,6 +1600,7 @@ impl Expr<'_> {
             ExprKind::CilkSpawn(..) => ExprPrecedence::CilkSpawn,
             ExprKind::CilkScope(..) => ExprPrecedence::CilkScope,
             ExprKind::CilkSync => ExprPrecedence::CilkSync,
+            ExprKind::Reattach => ExprPrecedence::Reattach,
             ExprKind::Err(_) => ExprPrecedence::Err,
         }
     }
@@ -1670,6 +1671,7 @@ impl Expr<'_> {
             | ExprKind::CilkSpawn(..)
             | ExprKind::CilkScope(..)
             | ExprKind::CilkSync
+            | ExprKind::Reattach
             | ExprKind::Err(_) => false,
         }
     }
@@ -1757,6 +1759,7 @@ impl Expr<'_> {
             | ExprKind::CilkSpawn(..)
             | ExprKind::CilkScope(..)
             | ExprKind::CilkSync
+            | ExprKind::Reattach
             | ExprKind::Err(_) => true,
         }
     }
@@ -1941,6 +1944,8 @@ pub enum ExprKind<'hir> {
 
     /// A suspension point for spawned tasks.
     CilkSync,
+
+    Reattach,
 
     /// A placeholder for an expression that wasn't syntactically well formed in some way.
     Err(rustc_span::ErrorGuaranteed),

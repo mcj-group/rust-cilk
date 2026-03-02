@@ -92,6 +92,7 @@ pub fn expr_trailing_brace(mut expr: &ast::Expr) -> Option<&ast::Expr> {
             | Try(_)
             | Yeet(None)
             | CilkSync
+            | Reattach
             | Err => break None,
         }
     }
