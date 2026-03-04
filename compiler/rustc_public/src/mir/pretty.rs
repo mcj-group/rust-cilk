@@ -198,6 +198,9 @@ fn pretty_terminator_head<W: Write>(writer: &mut W, terminator: &TerminatorKind)
             write!(writer, ")")
         }
         InlineAsm { .. } => write!(writer, "{INDENT}InlineAsm"),
+        Detach { .. } => write!(writer, "detach"),
+        Reattach { .. } => write!(writer, "reattach"),
+        Sync { .. } => write!(writer, "sync"),
     }
 }
 
@@ -223,6 +226,9 @@ fn pretty_successor_labels(terminator: &TerminatorKind) -> Vec<String> {
         }
         Assert { unwind: _, .. } => vec!["success".into()],
         InlineAsm { destination: Some(_), .. } => vec!["goto".into(), "unwind".into()],
+        Detach { .. } => vec!["spawned_task".into(), "continuation".into()],
+        Reattach { .. } => vec!["continuation".into()],
+        Sync { .. } => vec!["target".into()],
     }
 }
 

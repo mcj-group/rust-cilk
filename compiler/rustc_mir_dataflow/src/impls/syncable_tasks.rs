@@ -10,17 +10,18 @@
 //! can provide (such as dataflow state at locations other than syncs).
 
 use rustc_data_structures::fx::FxHashMap;
-use rustc_index::bit_set::BitSet;
+use rustc_index::bit_set::DenseBitSet;
 use rustc_middle::mir;
 use rustc_middle::ty::TyCtxt;
 use std::iter::Iterator;
+use tracing::instrument;
 
 use smallvec::SmallVec;
 
 use crate::fmt::DebugWithContext;
 use crate::lattice::Dual;
 use crate::task_info::{Task, TaskInfo};
-use crate::{Analysis, AnalysisDomain, Forward, GenKill, GenKillAnalysis, Results, ResultsCursor};
+use crate::{Analysis, Forward, GenKill, Results, ResultsCursor};
 
 /// An analysis of which tasks can be definitely synced at any given program point.
 /// The terminators of interest here are, similar to LogicallyParallelTasks,
@@ -51,15 +52,15 @@ pub struct DefinitelySyncableTasks<'task_info> {
     // We use a sparse representation here with a HashMap rather than an IndexVec because
     // there are probably many fewer continuation headers than there are basic blocks in
     // a function body.
-    saved_reattach_state: FxHashMap<mir::BasicBlock, Dual<BitSet<Task>>>,
+    saved_reattach_state: FxHashMap<mir::BasicBlock, Dual<DenseBitSet<Task>>>,
 }
 
 impl<'task_info> DefinitelySyncableTasks<'task_info> {
-    fn cache_reattach_state(&mut self, block: mir::BasicBlock, output_state: Dual<BitSet<Task>>) {
+    fn cache_reattach_state(&mut self, block: mir::BasicBlock, output_state: Dual<DenseBitSet<Task>>) {
         self.saved_reattach_state.insert(block, output_state);
     }
 
-    fn get_reattach_state(&self, current_block: mir::BasicBlock) -> Option<&Dual<BitSet<Task>>> {
+    fn get_reattach_state(&self, current_block: mir::BasicBlock) -> Option<&Dual<DenseBitSet<Task>>> {
         self.saved_reattach_state.get(&current_block)
     }
 
@@ -83,8 +84,8 @@ impl<'task_info> DefinitelySyncableTasks<'task_info> {
     }
 }
 
-impl<'tcx, 'task_info> AnalysisDomain<'tcx> for DefinitelySyncableTasks<'task_info> {
-    type Domain = Dual<BitSet<Task>>;
+impl<'tcx, 'task_info> Analysis<'tcx> for DefinitelySyncableTasks<'task_info> {
+    type Domain = Dual<DenseBitSet<Task>>;
     type Direction = Forward;
 
     const NAME: &'static str = "definitely_syncable_tasks";
@@ -95,7 +96,7 @@ impl<'tcx, 'task_info> AnalysisDomain<'tcx> for DefinitelySyncableTasks<'task_in
         // blocks see what they get from their predecessors. It's just
         // that our join operator is intersection so we need the
         // bottom value to be the identity.
-        Dual(BitSet::new_filled(self.task_info.num_tasks()))
+        Dual(DenseBitSet::new_filled(self.task_info.num_tasks()))
     }
 
     fn initialize_start_block(&self, _body: &mir::Body<'tcx>, state: &mut <Self as Analysis<'tcx>>::Domain) {
@@ -103,25 +104,17 @@ impl<'tcx, 'task_info> AnalysisDomain<'tcx> for DefinitelySyncableTasks<'task_in
         state.0.clear();
         state.gen_(Task::from_usize(0));
     }
-}
 
-impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for DefinitelySyncableTasks<'task_info> {
-    type Idx = Task;
-
-    fn domain_size(&self, _body: &mir::Body<'tcx>) -> usize {
-        self.task_info.num_tasks()
-    }
-
-    fn statement_effect(
+    fn apply_primary_statement_effect(
         &mut self,
-        trans: &mut impl GenKill<Self::Idx>,
-        _statement: &mir::Statement<'tcx>,
-        location: mir::Location,
+        state: &mut Self::Domain,
+        stmt: &mir::Statement<'tcx>,
+        loc: mir::Location,
     ) {
-        self.update_state_from_reattach_state(location, trans);
+        self.update_state_from_reattach_state(loc, state);
     }
 
-    fn call_return_effect(
+    fn apply_call_return_effect(
         &mut self,
         _trans: &mut <Self as Analysis<'tcx>>::Domain,
         _block: mir::BasicBlock,
@@ -133,29 +126,29 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for DefinitelySyncableTasks<'task_i
         // only on successful return.
     }
 
-    fn terminator_effect<'mir>(
+    fn apply_primary_terminator_effect<'mir>(
         &mut self,
-        trans: &mut <Self as Analysis<'tcx>>::Domain,
+        state: &mut <Self as Analysis<'tcx>>::Domain,
         terminator: &'mir mir::Terminator<'tcx>,
         location: mir::Location,
     ) -> mir::TerminatorEdges<'mir, 'tcx> {
-        self.update_state_from_reattach_state(location, trans);
+        self.update_state_from_reattach_state(location, state);
 
         let kind = &terminator.kind;
         if let mir::TerminatorKind::Detach { spawned_task, continuation: _ } = kind {
             // We now add the spawned task to the syncable task set.
             let spawned_task = self.task_info.expect_task(*spawned_task);
-            trans.gen_(spawned_task);
+            state.gen_(spawned_task);
         } else if let mir::TerminatorKind::Reattach { continuation } = kind {
             // We have to save the current state for bookkeeping when we reach the
             // continuation: we know that by the traversal order this is the last
             // reattach before the dataflow analysis reaches the continuation.
-            self.cache_reattach_state(*continuation, trans.clone());
+            self.cache_reattach_state(*continuation, state.clone());
         } else if let mir::TerminatorKind::Sync { target: _ } = kind {
             // Remove all descendants from the dataflow state: they'll be synced by
             // this sync.
             let current_task = self.task_info.expect_task(location.block);
-            trans.kill_all(self.task_info.descendants(current_task));
+            state.kill_all(self.task_info.descendants(current_task));
         }
 
         terminator.edges()
@@ -174,50 +167,42 @@ pub struct MaybeSyncableTasks<'task_info> {
     task_info: &'task_info TaskInfo,
 }
 
-impl<'tcx, 'task_info> AnalysisDomain<'tcx> for MaybeSyncableTasks<'task_info> {
-    type Domain = BitSet<Task>;
+impl<'tcx, 'task_info> Analysis<'tcx> for MaybeSyncableTasks<'task_info> {
+    type Domain = DenseBitSet<Task>;
 
     type Direction = Forward;
 
     const NAME: &'static str = "maybe_syncable_tasks";
 
     fn bottom_value(&self, _body: &mir::Body<'tcx>) -> <Self as Analysis<'tcx>>::Domain {
-        BitSet::new_empty(self.task_info.num_tasks())
+        DenseBitSet::new_empty(self.task_info.num_tasks())
     }
 
     fn initialize_start_block(&self, _body: &mir::Body<'tcx>, state: &mut <Self as Analysis<'tcx>>::Domain) {
         state.gen_(Task::from_usize(0))
     }
-}
 
-impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for MaybeSyncableTasks<'task_info> {
-    type Idx = Task;
-
-    fn domain_size(&self, _body: &mir::Body<'tcx>) -> usize {
-        self.task_info.num_tasks()
-    }
-
-    fn statement_effect(
-        &mut self,
-        _trans: &mut impl GenKill<Self::Idx>,
+    fn apply_primary_statement_effect(
+        &self,
+        _state: &mut Self::Domain,
         _statement: &mir::Statement<'tcx>,
         _location: mir::Location,
     ) {
         // Nothing to see here: there are no statements that modify task state.
     }
 
-    fn call_return_effect(
-        &mut self,
-        _trans: &mut <Self as Analysis<'tcx>>::Domain,
+    fn apply_call_return_effect(
+        &self,
+        _state: &mut Self::Domain,
         _block: mir::BasicBlock,
         _return_places: mir::CallReturnPlaces<'_, 'tcx>,
     ) {
         // See [DefinitelySyncableTasks::call_return_effect] for why this is empty.
     }
 
-    fn terminator_effect<'mir>(
-        &mut self,
-        trans: &mut <Self as Analysis<'tcx>>::Domain,
+    fn apply_primary_terminator_effect<'mir>(
+        &self,
+        state: &mut Self::Domain,
         terminator: &'mir mir::Terminator<'tcx>,
         location: mir::Location,
     ) -> mir::TerminatorEdges<'mir, 'tcx> {
@@ -226,7 +211,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for MaybeSyncableTasks<'task_info> 
         if let mir::TerminatorKind::Detach { spawned_task, continuation: _ } = kind {
             // Add the spawned task.
             let spawned_task = self.task_info.expect_task(*spawned_task);
-            trans.gen_(spawned_task);
+            state.gen_(spawned_task);
         } else if let mir::TerminatorKind::Reattach { continuation: _ } = kind {
             // No-op: don't actually have to do anything for this case
             // since reattach doesn't change the tasks which might be running
@@ -234,7 +219,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for MaybeSyncableTasks<'task_info> 
         } else if let mir::TerminatorKind::Sync { target: _ } = kind {
             // Remove any tasks that are descendants of the current task.
             let current_task = self.task_info.expect_task(location.block);
-            trans.kill_all(self.task_info.descendants(current_task));
+            state.kill_all(self.task_info.descendants(current_task));
         }
 
         terminator.edges()
@@ -301,10 +286,10 @@ impl<'cursor, 'mir, 'tcx, A, F, I> Iterator for SyncedTasksIter<'cursor, 'mir, '
 where
     A: Analysis<'tcx>,
     A::Domain: Clone,
-    F: FnMut(A::Domain, &A::Domain) -> BitSet<Task> + 'static,
+    F: FnMut(A::Domain, &A::Domain) -> DenseBitSet<Task> + 'static,
     I: EnumeratedBlockIter<'mir, 'tcx>,
 {
-    type Item = (mir::Location, BitSet<Task>);
+    type Item = (mir::Location, DenseBitSet<Task>);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.syncs.next().map(|location| {
@@ -329,7 +314,7 @@ fn synced_tasks_for_body<'cursor, 'mir, 'tcx, A, F>(
 where
     A: Analysis<'tcx>,
     A::Domain: Clone,
-    F: FnMut(A::Domain, &A::Domain) -> BitSet<Task> + 'static,
+    F: FnMut(A::Domain, &A::Domain) -> DenseBitSet<Task> + 'static,
 {
     let syncs = SyncsIter { iter: body.basic_blocks.iter_enumerated() };
     SyncedTasksIter { syncs, cursor, merge }
@@ -356,7 +341,7 @@ impl DefinitelySyncedTasks {
             before.0.subtract(&after.0);
             before.0
         })
-        .map(|(location, tasks)| {
+        .map(|(location, tasks): (mir::Location, SmallVec<_>)| {
             let tasks: SmallVec<[Task; 2]> = tasks.iter().collect();
             (location, tasks)
         })

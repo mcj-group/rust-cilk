@@ -194,6 +194,7 @@ macro_rules! make_mir_visitor {
                             self.visit_operand(dst, location);
                             self.visit_operand(count, location);
                         }
+                        NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop => {},
                     },
                     StatementKind::ConstEvalCounter | StatementKind::Nop => {}
                 }
@@ -239,6 +240,13 @@ macro_rules! make_mir_visitor {
                     TerminatorKind::SwitchInt { discr, targets: _ } => {
                         self.visit_operand(discr, location);
                     }
+                    // NOTE(jhilton): this should be the right visitor behavior since there are no direct values to visit.
+
+                    TerminatorKind::Detach { spawned_task: _, continuation: _ } => {}
+
+                    TerminatorKind::Reattach { continuation: _ } => {}
+
+                    TerminatorKind::Sync { .. } => {}
                 }
             }
 

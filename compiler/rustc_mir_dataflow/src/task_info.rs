@@ -2,9 +2,10 @@ use rustc_data_structures::fx::FxHashSet;
 use rustc_data_structures::work_queue::WorkQueue;
 use rustc_data_structures::{fx::FxHashMap, sync::HashMapExt};
 use rustc_index::IndexSlice;
-use rustc_index::{bit_set::BitSet, IndexVec};
+use rustc_index::{bit_set::DenseBitSet, IndexVec};
 use rustc_middle::mir::{self, BasicBlock, Location};
 use smallvec::SmallVec;
+use tracing::instrument;
 
 use crate::fmt::DebugWithContext;
 
@@ -74,12 +75,12 @@ impl TaskDataBuilder {
             (_, None) => Err(InvalidTaskData::MissingLastLocation),
         }?;
 
-        let mut children = BitSet::new_empty(num_tasks);
+        let mut children = DenseBitSet::new_empty(num_tasks);
         for child in self.children {
             children.insert(child);
         }
 
-        let mut spindles = BitSet::new_empty(num_spindles);
+        let mut spindles = DenseBitSet::new_empty(num_spindles);
         for spindle in self.spindles {
             spindles.insert(spindle);
         }
@@ -110,9 +111,9 @@ impl TaskKind {
 /// about the relationship of this task to other tasks.
 pub struct TaskData {
     /// The spindles in this task.
-    pub spindles: BitSet<Spindle>,
+    pub spindles: DenseBitSet<Spindle>,
     /// The children of this task.
-    pub children: BitSet<Task>,
+    pub children: DenseBitSet<Task>,
     /// Whether this is a root or child task.
     pub kind: TaskKind,
 }
@@ -153,8 +154,8 @@ impl From<SpindleDataBuilder> for SpindleData {
     }
 }
 
-fn cleanup_blocks(body: &mir::Body<'_>) -> BitSet<BasicBlock> {
-    let mut cleanup_blocks = BitSet::new_empty(body.basic_blocks.len());
+fn cleanup_blocks(body: &mir::Body<'_>) -> DenseBitSet<BasicBlock> {
+    let mut cleanup_blocks = DenseBitSet::new_empty(body.basic_blocks.len());
     for (bb, bb_data) in body.basic_blocks.iter_enumerated() {
         if bb_data.is_cleanup {
             cleanup_blocks.insert(bb);
@@ -167,14 +168,14 @@ fn cleanup_blocks(body: &mir::Body<'_>) -> BitSet<BasicBlock> {
 ///
 /// We expect that all basic blocks b in the returned subgraph U
 /// are either cleanup blocks or b.predecessors() is a subset of the nodes of U.
-fn unwind_subgraph(body: &mir::Body<'_>) -> BitSet<BasicBlock> {
+fn unwind_subgraph(body: &mir::Body<'_>) -> DenseBitSet<BasicBlock> {
     let mut queue = WorkQueue::with_none(body.basic_blocks.len());
     queue.extend(
         body.basic_blocks
             .iter_enumerated()
             .filter_map(|(bb, bb_data)| bb_data.is_cleanup.then(|| bb)),
     );
-    let mut subgraph = BitSet::new_empty(body.basic_blocks.len());
+    let mut subgraph = DenseBitSet::new_empty(body.basic_blocks.len());
 
     // Do a breadth-first search to find all blocks reachable from blocks labeled as cleanup.
     while let Some(block) = queue.pop() {
@@ -200,8 +201,8 @@ struct TaskInfoBuilder<'body, 'tcx> {
     spindles: IndexVec<Spindle, SpindleDataBuilder>,
     block_tasks: FxHashMap<BasicBlock, Task>,
     block_spindles: FxHashMap<BasicBlock, Spindle>,
-    unwind_subgraph: BitSet<BasicBlock>,
-    cleanup_blocks: BitSet<BasicBlock>,
+    unwind_subgraph: DenseBitSet<BasicBlock>,
+    cleanup_blocks: DenseBitSet<BasicBlock>,
 }
 
 /// [TaskInfo] represents information about a function body's Tapir tasks and spindles
@@ -444,7 +445,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
         self
     }
 
-    fn despeculate_phi_spindles(&mut self) -> BitSet<Spindle> {
+    fn despeculate_phi_spindles(&mut self) -> DenseBitSet<Spindle> {
         fn has_switch_int_predecessor(
             builder: &TaskInfoBuilder<'_, '_>,
             block: BasicBlock,
@@ -530,7 +531,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
         // actually all the same and no SwitchInt predecessor, in which case we don't need a phi.
 
         let mut spindle_blocks = build_spindle_blocks(&self.spindles, &self.block_spindles);
-        let mut removed_spindles = BitSet::new_empty(self.spindles.len());
+        let mut removed_spindles = DenseBitSet::new_empty(self.spindles.len());
 
         // Now we need to find the speculative phi nodes that can actually be converted. This means
         // we need to find a speculative phi node that has predecessors which are all in the same spindle.
@@ -555,7 +556,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
         removed_spindles
     }
 
-    fn remove_empty_spindles(&mut self, removed_spindles: &BitSet<Spindle>) -> &mut Self {
+    fn remove_empty_spindles(&mut self, removed_spindles: &DenseBitSet<Spindle>) -> &mut Self {
         // When we iterate over block_spindles, we always iterate over all of them, so iteration order can't
         // matter. We have no state dependent on which iterations have executed already.
         #[allow(rustc::potential_query_instability)]
@@ -699,7 +700,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
 
     fn validate_unwind_subgraph_spindles(
         block_spindles: &IndexSlice<BasicBlock, Option<Spindle>>,
-        unwind_subgraph: &BitSet<BasicBlock>,
+        unwind_subgraph: &DenseBitSet<BasicBlock>,
     ) {
         for (block, spindle) in block_spindles.iter_enumerated() {
             assert!(
@@ -737,9 +738,9 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
 
     fn validate_spindle_connected(body: &'body mir::Body<'tcx>, spindle: &SpindleData) {
         let mut queue = WorkQueue::with_none(body.basic_blocks.len());
-        let mut seen = BitSet::new_empty(body.basic_blocks.len());
+        let mut seen = DenseBitSet::new_empty(body.basic_blocks.len());
         let spindle_blocks = {
-            let mut spindle_blocks = BitSet::new_empty(body.basic_blocks.len());
+            let mut spindle_blocks = DenseBitSet::new_empty(body.basic_blocks.len());
             for block in &spindle.blocks {
                 spindle_blocks.insert(*block);
             }

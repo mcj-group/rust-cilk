@@ -1,5 +1,5 @@
 use rustc_abi::VariantIdx;
-use rustc_data_structures::assert_matches;
+use rustc_data_structures::{assert_matches, fx::FxHashMap};
 use rustc_index::Idx;
 use rustc_index::bit_set::{DenseBitSet, MixedBitSet};
 use rustc_middle::bug;
@@ -12,11 +12,9 @@ use smallvec::SmallVec;
 use tracing::{debug, instrument};
 
 use crate::drop_flag_effects::{DropFlagState, InactiveVariants};
-use crate::mark_cilk_tasks::TaskTree;
-
 use crate::elaborate_drops::DropFlagState;
 use crate::framework::SwitchIntEdgeEffects;
-use crate::task_info::TaskInfo;
+use crate::task_info::{Task, TaskInfo};
 use crate::move_paths::{HasMoveData, InitIndex, InitKind, LookupResult, MoveData, MovePathIndex};
 use crate::{
     Analysis, GenKill, MaybeReachable, drop_flag_effects, drop_flag_effects_for_function_entry,
@@ -154,7 +152,7 @@ pub struct MaybeInitializedPlaces<'a, 'tcx> {
     maybe_synced_tasks: &'a MaybeSyncedTasks,
     /// Maps locations to the state of the dataflow analysis at that location. The locations in this
     /// map are the last locations of tasks.
-    state_at_last_locations: FxHashMap<Location, MaybeReachable<ChunkedBitSet<MovePathIndex>>>,
+    state_at_last_locations: FxHashMap<Location, MaybeReachable<MixedBitSet<MovePathIndex>>>,
 }
 
 impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
@@ -253,7 +251,7 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
     task_info: &'a TaskInfo,
     definitely_synced_tasks: &'a DefinitelySyncedTasks,
     /// See [MaybeInitializedPlaces::state_at_last_locations].
-    state_at_last_locations: FxHashMap<Location, ChunkedBitSet<MovePathIndex>>,
+    state_at_last_locations: FxHashMap<Location, MixedBitSet<MovePathIndex>>,
 }
 
 impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
@@ -338,7 +336,7 @@ pub struct EverInitializedPlaces<'a, 'tcx> {
     move_data: &'a MoveData<'tcx>,
     task_info: &'a TaskInfo,
     maybe_synced_tasks: &'a MaybeSyncedTasks,
-    state_at_last_locations: FxHashMap<Location, ChunkedBitSet<InitIndex>>,
+    state_at_last_locations: FxHashMap<Location, MixedBitSet<InitIndex>>,
 }
 
 impl<'a, 'tcx> EverInitializedPlaces<'a, 'tcx> {

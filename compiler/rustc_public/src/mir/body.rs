@@ -172,7 +172,7 @@ pub enum TerminatorKind {
     },
     Sync{
         target: BasicBlockIdx
-    }
+    },
     Drop {
         place: Place,
         target: BasicBlockIdx,

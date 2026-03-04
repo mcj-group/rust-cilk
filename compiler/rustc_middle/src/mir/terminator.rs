@@ -555,7 +555,7 @@ mod helper {
                 | Drop { target: ref t, unwind: UnwindAction::Cleanup(u), drop: None, .. }
                 | Drop { target: ref t, unwind: _, drop: Some(u), .. }
                 | Assert { target: ref t, unwind: UnwindAction::Cleanup(u), .. }
-                | FalseUnwind { real_target: ref t, unwind: UnwindAction::Cleanup(u) } => { // TODO(CAIATHEN): what is the unwind behaviour of detach?
+                | FalseUnwind { real_target: ref t, unwind: UnwindAction::Cleanup(u) } => {
                     mk_successors(slice::from_ref(t), Some(u), None)
                 }
                 // single successor
