@@ -289,6 +289,8 @@ impl<'tcx> TyCtxt<'tcx> {
                     | ExprKind::DropTemps(_)
                     | ExprKind::If(_, _, _)
                     | ExprKind::Closure(_)
+                    | ExprKind::CilkSpawn(_)
+                    | ExprKind::CilkScope(_)
                     | ExprKind::Block(_, _)
                     | ExprKind::AssignOp(_, _, _)
                     | ExprKind::Index(_, _, _)
@@ -307,6 +309,7 @@ impl<'tcx> TyCtxt<'tcx> {
                     | ExprKind::Path(_)
                     | ExprKind::Continue(_)
                     | ExprKind::OffsetOf(_, _)
+                    | ExprKind::CilkSync
                     | ExprKind::Err(_) => unreachable!("no sub-expr expected for {:?}", expr.kind),
                 }
             }

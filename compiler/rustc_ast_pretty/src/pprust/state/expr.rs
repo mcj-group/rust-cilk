@@ -747,16 +747,16 @@ impl<'a> State<'a> {
                 }
             }
             ast::ExprKind::CilkSpawn(body) => {
-                self.cbox(0);
-                self.ibox(0);
+                let cb = self.cbox(0);
+                let ib = self.ibox(0);
                 self.word_nbsp("cilk_spawn");
-                self.print_block_with_attrs(body, attrs);
+                self.print_block_with_attrs(body, attrs, cb, ib);
             }
             ast::ExprKind::CilkScope(body) => {
-                self.cbox(0);
-                self.ibox(0);
+                let cb = self.cbox(0);
+                let ib = self.ibox(0);
                 self.word_nbsp("cilk_scope");
-                self.print_block_with_attrs(body, attrs);
+                self.print_block_with_attrs(body, attrs, cb, ib);
             }
             ast::ExprKind::CilkSync => {
                 self.word("cilk_sync");

@@ -555,8 +555,7 @@ mod helper {
                 | Drop { target: ref t, unwind: UnwindAction::Cleanup(u), drop: None, .. }
                 | Drop { target: ref t, unwind: _, drop: Some(u), .. }
                 | Assert { target: ref t, unwind: UnwindAction::Cleanup(u), .. }
-                | FalseUnwind { real_target: ref t, unwind: UnwindAction::Cleanup(u) }
-                | Detach { spawned_task: t, continuation: ref u } => {
+                | FalseUnwind { real_target: ref t, unwind: UnwindAction::Cleanup(u) } => { // TODO(CAIATHEN): what is the unwind behaviour of detach?
                     mk_successors(slice::from_ref(t), Some(u), None)
                 }
                 // single successor
@@ -566,10 +565,9 @@ mod helper {
                 | Yield { resume: ref t, drop: None, .. }
                 | Drop { target: ref t, unwind: _, .. }
                 | Assert { target: ref t, unwind: _, .. }
-                | Detach { spawned_task: t, continuation: ref u }
                 | FalseUnwind { real_target: ref t, unwind: _ }
-                | Reattach { continuation: t, destination: _ }
-                | Sync { target: t } => {
+                | Reattach { continuation: ref t, .. }
+                | Sync { target: ref t } => {
                     mk_successors(slice::from_ref(t), None, None)
                 }
                 // No successors
@@ -589,6 +587,9 @@ mod helper {
                 // FalseEdge
                 FalseEdge { ref real_target, imaginary_target } => {
                     mk_successors(slice::from_ref(real_target), Some(imaginary_target), None)
+                }
+                Detach {spawned_task: ref task, continuation: cont} => {
+                    mk_successors(slice::from_ref(task), Some(cont), None)
                 }
             }
         }

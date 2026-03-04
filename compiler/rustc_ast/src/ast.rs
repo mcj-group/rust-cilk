@@ -1605,6 +1605,9 @@ impl Expr {
             | ExprKind::Continue(..)
             | ExprKind::Field(..)
             | ExprKind::ForLoop { .. }
+            | ExprKind::CilkSpawn(..) // FIXME(CAIATHEN): I am not sure if this is correct, need to test
+            | ExprKind::CilkScope(..)
+            | ExprKind::CilkSync
             | ExprKind::FormatArgs(..)
             | ExprKind::Gen(..)
             | ExprKind::If(..)

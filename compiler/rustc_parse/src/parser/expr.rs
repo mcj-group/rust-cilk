@@ -1525,9 +1525,9 @@ impl<'a> Parser<'a> {
                         err
                     },
                 )
-            } else if this.eat_keyword(kw::CilkSpawn) {
+            } else if this.eat_keyword(exp!(CilkSpawn)) {
                 this.parse_cilk_spawn()
-            } else if this.eat_keyword(kw::CilkScope) {
+            } else if this.eat_keyword(exp!(CilkScope)) {
                 this.parse_cilk_scope()
             } else if this.check_inline_const(0) {
                 this.parse_const_block(lo, false)
@@ -1544,7 +1544,7 @@ impl<'a> Parser<'a> {
                 this.parse_expr_break()
             } else if this.eat_keyword(exp!(Yield)) {
                 this.parse_expr_yield()
-            } else if this.eat_keyword(kw::CilkSync) {
+            } else if this.eat_keyword(exp!(CilkSync)) {
                 // I think it's weird that cilk_sync is an expr but it means we can omit the semicolon,
                 // which has similarly rust-y vibes.
                 this.parse_expr_cilk_sync()
@@ -1987,10 +1987,10 @@ impl<'a> Parser<'a> {
         self.maybe_recover_from_bad_qpath(expr)
     }
 
-    fn parse_expr_cilk_sync(&mut self) -> PResult<'a, P<Expr>> {
+    fn parse_expr_cilk_sync(&mut self) -> PResult<'a, Box<Expr>> {
         let lo = self.prev_token.span;
         let kind = ExprKind::CilkSync;
-        self.sess.gated_spans.gate(sym::cilk, lo.to(self.prev_token.span));
+        self.psess.gated_spans.gate(sym::cilk, lo.to(self.prev_token.span));
         Ok(self.mk_expr(lo.to(self.prev_token.span), kind))
     }
 
@@ -2999,15 +2999,15 @@ impl<'a> Parser<'a> {
     }
 
     // Parses `cilk_for <src_pat> in <src_expr> <src_loop_block>` (`cilk_for` token already eaten).
-    fn parse_expr_cilk_for(&mut self, opt_label: Option<Label>, lo: Span) -> PResult<'a, P<Expr>> {
+    fn parse_expr_cilk_for(&mut self, opt_label: Option<Label>, lo: Span) -> PResult<'a, Box<Expr>> {
         self.parse_expr_for_any_kind(opt_label, lo, |_this| ForLoopKind::CilkFor)
     }
 
     /// Parses `for await? <src_pat> in <src_expr> <src_loop_block>` (`for` token already eaten).
-    fn parse_expr_for(&mut self, opt_label: Option<Label>, lo: Span) -> PResult<'a, P<Expr>> {
+    fn parse_expr_for(&mut self, opt_label: Option<Label>, lo: Span) -> PResult<'a, Box<Expr>> {
         self.parse_expr_for_any_kind(opt_label, lo, |this| {
-            let is_await = this.token.uninterpolated_span().at_least_rust_2018()
-                && this.eat_keyword(kw::Await);
+            let is_await = this.token.uninterpolate().span.at_least_rust_2018()
+                && this.eat_keyword(exp!(Await));
 
             if is_await { ForLoopKind::ForAwait } else { ForLoopKind::For }
         })
@@ -3024,7 +3024,7 @@ impl<'a> Parser<'a> {
         opt_label: Option<Label>,
         lo: Span,
         find_kind: impl Fn(&mut Self) -> ForLoopKind,
-    ) -> PResult<'a, P<Expr>> {
+    ) -> PResult<'a, Box<Expr>> {
         let kind = find_kind(self);
         let feature = match kind {
             ForLoopKind::CilkFor => Some(sym::cilk),
@@ -3032,7 +3032,7 @@ impl<'a> Parser<'a> {
             ForLoopKind::For => None,
         };
         if let Some(feature) = feature {
-            self.sess.gated_spans.gate(feature, self.prev_token.span);
+            self.psess.gated_spans.gate(feature, self.prev_token.span);
         }
 
         let (pat, expr) = self.parse_for_head()?;
@@ -3684,13 +3684,13 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses the expression in cilk_spawn <expr>. Precondition: cilk_spawn already eaten.
-    fn parse_cilk_spawn(&mut self) -> PResult<'a, P<Expr>> {
+    fn parse_cilk_spawn(&mut self) -> PResult<'a, Box<Expr>> {
         let spawn_span = self.prev_token.span;
-        self.sess.gated_spans.gate(sym::cilk, spawn_span);
+        self.psess.gated_spans.gate(sym::cilk, spawn_span);
         // FIXME(jhilton): cilk_spawn can also prefix a function call. We should figure out how to make that work, but for now it's
         // fine to require all cilk exprs to be in a block I think. We can use parse_expr directly here, or parse_expr_res if there
         // are restrictions we care about.
-        let (attrs, body) = self.parse_inner_attrs_and_block().map_err(|mut err| {
+        let (attrs, body) = self.parse_inner_attrs_and_block(None).map_err(|mut err| {
             err.span_label(spawn_span, "while parsing this `cilk_spawn` expression");
             err
         })?;
@@ -3701,14 +3701,14 @@ impl<'a> Parser<'a> {
     }
 
     /// Parses the block in cilk_scope <block>. Precondition: cilk_scope already eaten.
-    fn parse_cilk_scope(&mut self) -> PResult<'a, P<Expr>> {
+    fn parse_cilk_scope(&mut self) -> PResult<'a, Box<Expr>> {
         // NOTE(jhilton): This is temporarily very similar to `parse_cilk_spawn`. Repetitiveness in parsing
         // between syntactic structures that aren't intentionally similar isn't something I really mind,
         // since it makes it more obvious what's being parsed.
         let scope_span = self.prev_token.span;
-        self.sess.gated_spans.gate(sym::cilk, scope_span);
+        self.psess.gated_spans.gate(sym::cilk, scope_span);
         // cilk_scope should prefix a block, so noew we want there to be a block after this.
-        let (attrs, body) = self.parse_inner_attrs_and_block().map_err(|mut err| {
+        let (attrs, body) = self.parse_inner_attrs_and_block(None).map_err(|mut err| {
             err.span_label(scope_span, "while parsing this `cilk_scope` expression");
             err
         })?;
@@ -4461,10 +4461,12 @@ impl MutVisitor for CondChecker<'_> {
             | ExprKind::Become(_)
             | ExprKind::IncludedBytes(_)
             | ExprKind::FormatArgs(_)
-            | ExprKind::Err(_)
-            | ExprKind::Dummy => {
             // CilkSync can't contain any expressions.
             | ExprKind::CilkSync
+            | ExprKind::Err(_)
+            | ExprKind::Dummy => {
+                // These would forbid any let expressions they contain already.
+            }
         }
         self.depth -= 1;
     }

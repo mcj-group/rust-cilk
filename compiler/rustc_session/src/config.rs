@@ -2668,11 +2668,6 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
         )
     }
 
-    let opencilk_rt_path =
-    std::env::var("OPENCILK_RT_SEARCH_DIR").expect("OPENCILK_RT_SEARCH_DIR must be set");
-    let opencilk_rt_path = Path::new(&opencilk_rt_path);
-    search_paths.push(SearchPath::from_opencilk_runtime_path(opencilk_rt_path));
-
     // Parse any `-l` flags, which link to native libraries.
     let libs = parse_native_libs(early_dcx, &unstable_opts, unstable_features, matches);
 
@@ -2732,7 +2727,7 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
     // times, and the directory contains a lot of files, this can take a lot of time.
     // So we remove -L paths that were passed multiple times, and keep only the first occurrence.
     // We still have to keep the original order of the -L arguments.
-    let search_paths: Vec<SearchPath> = {
+    let mut search_paths: Vec<SearchPath> = {
         let mut seen_search_paths = FxHashSet::default();
         let search_path_matches: Vec<String> = matches.opt_strs("L");
         search_path_matches
@@ -2749,6 +2744,11 @@ pub fn build_session_options(early_dcx: &mut EarlyDiagCtxt, matches: &getopts::M
             })
             .collect()
     };
+
+    let opencilk_rt_path =
+    std::env::var("OPENCILK_RT_SEARCH_DIR").expect("OPENCILK_RT_SEARCH_DIR must be set");
+    let opencilk_rt_path = Path::new(&opencilk_rt_path);
+    search_paths.push(SearchPath::from_opencilk_runtime_path(opencilk_rt_path));
 
     // Ideally we would use `SourceMap::working_dir` instead, but we don't have access to it
     // so we manually create the potentially-remapped working directory

@@ -81,6 +81,10 @@ pub enum TokenType {
     KwBox,
     KwBreak,
     KwCatch,
+    KwCilkFor,
+    KwCilkScope,
+    KwCilkSpawn,
+    KwCilkSync,
     KwConst,
     KwContinue,
     KwContractEnsures,
@@ -222,6 +226,10 @@ impl TokenType {
             KwBox,
             KwBreak,
             KwCatch,
+            KwCilkFor,
+            KwCilkScope,
+            KwCilkSpawn,
+            KwCilkSync,
             KwConst,
             KwContinue,
             KwContractEnsures,
@@ -299,6 +307,10 @@ impl TokenType {
             TokenType::KwBox => Some(kw::Box),
             TokenType::KwBreak => Some(kw::Break),
             TokenType::KwCatch => Some(kw::Catch),
+            TokenType::KwCilkFor => Some(kw::CilkFor),
+            TokenType::KwCilkScope => Some(kw::CilkScope),
+            TokenType::KwCilkSpawn => Some(kw::CilkSpawn),
+            TokenType::KwCilkSync => Some(kw::CilkSync),
             TokenType::KwConst => Some(kw::Const),
             TokenType::KwContinue => Some(kw::Continue),
             TokenType::KwContractEnsures => Some(kw::ContractEnsures),
@@ -515,6 +527,10 @@ macro_rules! exp {
     (Box)            => { exp!(@kw, Box,        KwBox) };
     (Break)          => { exp!(@kw, Break,      KwBreak) };
     (Catch)          => { exp!(@kw, Catch,      KwCatch) };
+    (CilkFor)        => {exp!(@kw, CilkFor,     KwCilkFor)};
+    (CilkScope)      => {exp!(@kw, CilkScope,   KwCilkScope)};
+    (CilkSpawn)      => {exp!(@kw, CilkSpawn,   KwCilkSpawn)};
+    (CilkSync)       => {exp!(@kw, CilkSync,    KwCilkSync)};
     (Const)          => { exp!(@kw, Const,      KwConst) };
     (Continue)       => { exp!(@kw, Continue,   KwContinue) };
     (ContractEnsures)  => { exp!(@kw, ContractEnsures, KwContractEnsures) };

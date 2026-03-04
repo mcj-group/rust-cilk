@@ -2,7 +2,7 @@ use rustc_index::bit_set::BitSet;
 use rustc_middle::mir;
 
 use crate::task_info::{Task, TaskInfo};
-use crate::{AnalysisDomain, Forward, GenKill, GenKillAnalysis};
+use crate::{Analysis, AnalysisDomain, Forward, GenKill, GenKillAnalysis};
 
 /// An analysis of which tasks are executing logically in parallel at any given program point.
 /// The terminators of interest here are Detach, Reattach, and Sync, since no other statement
@@ -29,14 +29,14 @@ impl<'tcx, 'task_info> AnalysisDomain<'tcx> for LogicallyParallelTasks<'task_inf
 
     const NAME: &'static str = "logically_parallel_tasks";
 
-    fn bottom_value(&self, _body: &rustc_middle::mir::Body<'tcx>) -> Self::Domain {
+    fn bottom_value(&self, _body: &rustc_middle::mir::Body<'tcx>) -> <Self as Analysis<'tcx>>::Domain {
         BitSet::new_empty(self.task_info.num_tasks())
     }
 
     fn initialize_start_block(
         &self,
         _body: &rustc_middle::mir::Body<'tcx>,
-        state: &mut Self::Domain,
+        state: &mut <Self as Analysis<'tcx>>::Domain,
     ) {
         // Task 0 is initially executing at the beginning of the start block.
         state.insert(Task::from_usize(0));
@@ -62,7 +62,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for LogicallyParallelTasks<'task_in
 
     fn call_return_effect(
         &mut self,
-        _trans: &mut Self::Domain,
+        _trans: &mut <Self as Analysis<'tcx>>::Domain,
         _block: mir::BasicBlock,
         _return_places: mir::CallReturnPlaces<'_, 'tcx>,
     ) {
@@ -73,7 +73,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for LogicallyParallelTasks<'task_in
 
     fn terminator_effect<'mir>(
         &mut self,
-        trans: &mut Self::Domain,
+        trans: &mut <Self as Analysis<'tcx>>::Domain,
         terminator: &'mir rustc_middle::mir::Terminator<'tcx>,
         location: rustc_middle::mir::Location,
     ) -> rustc_middle::mir::TerminatorEdges<'mir, 'tcx> {

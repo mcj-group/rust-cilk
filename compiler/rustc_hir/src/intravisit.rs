@@ -945,6 +945,13 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr<'v>) 
             visit_opt!(visitor, visit_ty_unambig, ty);
         }
         ExprKind::Lit(lit) => try_visit!(visitor.visit_lit(*hir_id, lit, false)),
+        ExprKind::CilkSpawn(expr) => {
+            visitor.visit_expr(expr);
+        }
+        ExprKind::CilkSync => {}
+        ExprKind::CilkScope(block) => {
+            visitor.visit_block(block);
+        },
         ExprKind::Err(_) => {}
     }
     V::Result::output()
@@ -986,13 +993,6 @@ pub fn walk_generic_arg<'v, V: Visitor<'v>>(
         GenericArg::Infer(inf) => {
             let InferArg { hir_id, span } = inf;
             visitor.visit_infer(*hir_id, *span, InferKind::Ambig(inf))
-        }
-        ExprKind::CilkSpawn(expr) => {
-            visitor.visit_expr(expr);
-        }
-        ExprKind::CilkSync => {}
-        ExprKind::CilkScope(block) => {
-            visitor.visit_block(block);
         }
     }
 }

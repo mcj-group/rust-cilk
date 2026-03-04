@@ -14,7 +14,6 @@ use tracing::{debug, instrument};
 use crate::drop_flag_effects::{DropFlagState, InactiveVariants};
 use crate::mark_cilk_tasks::TaskTree;
 
-use crate::drop_flag_effects_for_function_entry;
 use crate::elaborate_drops::DropFlagState;
 use crate::framework::SwitchIntEdgeEffects;
 use crate::task_info::TaskInfo;
@@ -607,7 +606,7 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
             Self::update_bits(state, path, s)
         });
         if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
-            self.state_at_last_locations.insert(location, trans.clone());
+            self.state_at_last_locations.insert(location, state.clone());
         } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
             let synced_tasks = self.definitely_synced_tasks.synced_tasks_at(&location);
             synced_task_last_states(
@@ -615,10 +614,10 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
                 &self.task_info,
                 &self.state_at_last_locations,
             )
-            .for_each(|state| {
+            .for_each(|last_state| {
                 use crate::lattice::MeetSemiLattice;
                 // Bottom is all-initialized and top is all-uninitialized, so we want to use meet to go lower in the lattice.
-                trans.meet(state);
+                state.meet(last_state);
             });
         }
 
@@ -758,7 +757,7 @@ impl<'tcx> Analysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
                 .copied(),
         );
         if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
-            self.state_at_last_locations.insert(location, trans.clone());
+            self.state_at_last_locations.insert(location, state.clone());
         } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
             let synced_tasks = self.maybe_synced_tasks.synced_tasks_at(&location);
             // A state is ever initialized if it is ever initialized in some synced child.
@@ -767,10 +766,10 @@ impl<'tcx> Analysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
                 &self.task_info,
                 &self.state_at_last_locations,
             )
-            .for_each(|state| {
+            .for_each(|last_state| {
                 // This lattice has all-uninitialized as the bottom and the join operator adds
                 // initialized places, so we use join here.
-                trans.join(&state);
+                state.join(&last_state);
             });
         }
         terminator.edges()

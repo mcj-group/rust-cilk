@@ -163,6 +163,16 @@ pub enum TerminatorKind {
     Abort,
     Return,
     Unreachable,
+    Detach {
+        spawned_task: BasicBlockIdx, 
+        continuation: BasicBlockIdx
+    },
+    Reattach {
+        continuation: BasicBlockIdx
+    },
+    Sync{
+        target: BasicBlockIdx
+    }
     Drop {
         place: Place,
         target: BasicBlockIdx,
@@ -465,6 +475,8 @@ pub struct CopyNonOverlapping {
 pub enum NonDivergingIntrinsic {
     Assume(Operand),
     CopyNonOverlapping(CopyNonOverlapping),
+    TapirRuntimeStart,
+    TapirRuntimeStop,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

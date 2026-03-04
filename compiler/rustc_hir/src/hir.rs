@@ -2480,13 +2480,12 @@ impl Expr<'_> {
             | ExprKind::Let(..)
             | ExprKind::Unary(..) => ExprPrecedence::Prefix,
             
-            ExprKind::CilkSpawn(..) => ExprPrecedence::CilkSpawn,
-            ExprKind::CilkScope(..) => ExprPrecedence::CilkScope,
-            ExprKind::CilkSync => ExprPrecedence::CilkSync,
-
             // Need parens if and only if there are prefix attributes.
             ExprKind::Array(_)
             | ExprKind::Block(..)
+            | ExprKind::CilkSpawn(..)
+            | ExprKind::CilkScope(..)
+            | ExprKind::CilkSync
             | ExprKind::Call(..)
             | ExprKind::ConstBlock(_)
             | ExprKind::Continue(..)

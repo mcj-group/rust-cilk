@@ -89,7 +89,7 @@ impl<'tcx, 'task_info> AnalysisDomain<'tcx> for DefinitelySyncableTasks<'task_in
 
     const NAME: &'static str = "definitely_syncable_tasks";
 
-    fn bottom_value(&self, _body: &mir::Body<'tcx>) -> Self::Domain {
+    fn bottom_value(&self, _body: &mir::Body<'tcx>) -> <Self as Analysis<'tcx>>::Domain {
         // This bottom value shouldn't actually be observed by any block
         // directly since the entry sees something different and other
         // blocks see what they get from their predecessors. It's just
@@ -98,10 +98,10 @@ impl<'tcx, 'task_info> AnalysisDomain<'tcx> for DefinitelySyncableTasks<'task_in
         Dual(BitSet::new_filled(self.task_info.num_tasks()))
     }
 
-    fn initialize_start_block(&self, _body: &mir::Body<'tcx>, state: &mut Self::Domain) {
+    fn initialize_start_block(&self, _body: &mir::Body<'tcx>, state: &mut <Self as Analysis<'tcx>>::Domain) {
         // Task 0 is initially executing at the beginning of the start block.
         state.0.clear();
-        state.gen(Task::from_usize(0));
+        state.gen_(Task::from_usize(0));
     }
 }
 
@@ -123,7 +123,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for DefinitelySyncableTasks<'task_i
 
     fn call_return_effect(
         &mut self,
-        _trans: &mut Self::Domain,
+        _trans: &mut <Self as Analysis<'tcx>>::Domain,
         _block: mir::BasicBlock,
         _return_places: mir::CallReturnPlaces<'_, 'tcx>,
     ) {
@@ -135,7 +135,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for DefinitelySyncableTasks<'task_i
 
     fn terminator_effect<'mir>(
         &mut self,
-        trans: &mut Self::Domain,
+        trans: &mut <Self as Analysis<'tcx>>::Domain,
         terminator: &'mir mir::Terminator<'tcx>,
         location: mir::Location,
     ) -> mir::TerminatorEdges<'mir, 'tcx> {
@@ -145,7 +145,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for DefinitelySyncableTasks<'task_i
         if let mir::TerminatorKind::Detach { spawned_task, continuation: _ } = kind {
             // We now add the spawned task to the syncable task set.
             let spawned_task = self.task_info.expect_task(*spawned_task);
-            trans.gen(spawned_task);
+            trans.gen_(spawned_task);
         } else if let mir::TerminatorKind::Reattach { continuation } = kind {
             // We have to save the current state for bookkeeping when we reach the
             // continuation: we know that by the traversal order this is the last
@@ -181,12 +181,12 @@ impl<'tcx, 'task_info> AnalysisDomain<'tcx> for MaybeSyncableTasks<'task_info> {
 
     const NAME: &'static str = "maybe_syncable_tasks";
 
-    fn bottom_value(&self, _body: &mir::Body<'tcx>) -> Self::Domain {
+    fn bottom_value(&self, _body: &mir::Body<'tcx>) -> <Self as Analysis<'tcx>>::Domain {
         BitSet::new_empty(self.task_info.num_tasks())
     }
 
-    fn initialize_start_block(&self, _body: &mir::Body<'tcx>, state: &mut Self::Domain) {
-        state.gen(Task::from_usize(0))
+    fn initialize_start_block(&self, _body: &mir::Body<'tcx>, state: &mut <Self as Analysis<'tcx>>::Domain) {
+        state.gen_(Task::from_usize(0))
     }
 }
 
@@ -208,7 +208,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for MaybeSyncableTasks<'task_info> 
 
     fn call_return_effect(
         &mut self,
-        _trans: &mut Self::Domain,
+        _trans: &mut <Self as Analysis<'tcx>>::Domain,
         _block: mir::BasicBlock,
         _return_places: mir::CallReturnPlaces<'_, 'tcx>,
     ) {
@@ -217,7 +217,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for MaybeSyncableTasks<'task_info> 
 
     fn terminator_effect<'mir>(
         &mut self,
-        trans: &mut Self::Domain,
+        trans: &mut <Self as Analysis<'tcx>>::Domain,
         terminator: &'mir mir::Terminator<'tcx>,
         location: mir::Location,
     ) -> mir::TerminatorEdges<'mir, 'tcx> {
@@ -226,7 +226,7 @@ impl<'tcx, 'task_info> GenKillAnalysis<'tcx> for MaybeSyncableTasks<'task_info> 
         if let mir::TerminatorKind::Detach { spawned_task, continuation: _ } = kind {
             // Add the spawned task.
             let spawned_task = self.task_info.expect_task(*spawned_task);
-            trans.gen(spawned_task);
+            trans.gen_(spawned_task);
         } else if let mir::TerminatorKind::Reattach { continuation: _ } = kind {
             // No-op: don't actually have to do anything for this case
             // since reattach doesn't change the tasks which might be running

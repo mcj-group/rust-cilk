@@ -1753,11 +1753,15 @@ impl<'a> State<'a> {
             hir::ExprKind::CilkSpawn(expr) => {
                 // NOTE(jhilton): this precedence should make sense: cilk_spawn is a control flow construct.
                 self.word_space("cilk_spawn");
-                self.print_expr_maybe_paren(expr, parser::PREC_JUMP);
+                self.print_expr_cond_paren(expr, self.precedence(expr) < ExprPrecedence::Jump); // FIXME(CAIATHEN): just copied Yield because https://github.com/aleph-oh/rust/blob/bd639373f3f033e8c121f3e2448783598faf6ceb/compiler/rustc_hir_pretty/src/lib.rs
             }
             hir::ExprKind::CilkScope(block) => {
                 self.word_space("cilk_scope");
-                self.print_block(block);
+                // containing cbox, will be closed by print-block at `}`
+                let cb = self.cbox(0);
+                // head-box, will be closed by print-block after `{`
+                let ib = self.ibox(0);
+                self.print_block(block, cb, ib);
             }
             hir::ExprKind::CilkSync => {
                 self.word("cilk_sync");
