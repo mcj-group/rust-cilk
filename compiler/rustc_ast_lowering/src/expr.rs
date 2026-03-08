@@ -128,6 +128,7 @@ impl MutVisitor for CilkControlFlow<'_> {
                 noop_visit_expr(e, self);
                 self.inner_labels.pop();
             }
+            ExprKind::Closure(_) => {}
             _ => noop_visit_expr(e, self),
         };    
     }
