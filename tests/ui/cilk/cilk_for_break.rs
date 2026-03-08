@@ -1,7 +1,6 @@
 #![feature(cilk)]
 // Tests that a cilk_for loop with a break in it fails to compile.
 
-//@ known-bug: unknown
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
 
@@ -11,7 +10,7 @@ fn main() {
     let sum: AtomicU64 = AtomicU64::new(0);
     cilk_for i in 1..10 {
         if i == 5 {
-            break;
+            break; //~ error: cannot use `break` within cilk_for
         }
         sum.fetch_add(i, std::sync::atomic::Ordering::Relaxed);
     }

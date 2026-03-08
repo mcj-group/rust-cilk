@@ -1,0 +1,8 @@
+error: cannot use `break` within cilk_for
+  --> $DIR/cilk_for_break.rs:13:13
+   |
+LL |             break;
+   |             ^^^^^
+
+error: aborting due to 1 previous error
+
