@@ -2,8 +2,6 @@
 
 #![feature(cilk)]
 
-// This is expected to compile and run, currently it does not compile
-
 fn main() {
     cilk_for_in_cilk_spawn();
 }
