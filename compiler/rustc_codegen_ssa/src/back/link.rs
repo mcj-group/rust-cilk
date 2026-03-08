@@ -1321,6 +1321,10 @@ fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
 
         let as_needed = true;
         linker.link_dylib_by_name(name, verbatim, as_needed);
+        // TODO: does static linking need these?
+        // TODO: should we add them always?
+        linker.link_dylib_by_name("opencilk-personality-cpp", verbatim, as_needed);
+        linker.link_dylib_by_name("stdc++", verbatim, as_needed);
     } else {
         // We don't need to use the whole archive option since we probably aren't re-exporting all
         // the symbols from the OpenCilk runtime.
