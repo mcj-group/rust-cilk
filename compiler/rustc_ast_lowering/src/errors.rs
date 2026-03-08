@@ -408,3 +408,11 @@ pub(crate) struct BadControlFlowInCilkFor {
     pub span: Span,
     pub keyword: String,
 }
+
+#[derive(Diagnostic)]
+#[diag(ast_lowering_bad_cf_cilk_spawn)]
+pub(crate) struct BadControlFlowInCilkSpawn {
+    #[primary_span]
+    pub span: Span,
+    pub keyword: String,
+}

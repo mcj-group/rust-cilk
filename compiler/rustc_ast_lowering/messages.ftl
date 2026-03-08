@@ -160,3 +160,5 @@ ast_lowering_underscore_expr_lhs_assign =
 ast_lowering_use_angle_brackets = use angle brackets instead
 
 ast_lowering_bad_cf_cilk_for = cannot use `{$keyword}` within cilk_for
+
+ast_lowering_bad_cf_cilk_spawn = cannot use `{$keyword}` within cilk_spawn
