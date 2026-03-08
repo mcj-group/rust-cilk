@@ -469,7 +469,7 @@ impl<'ll, 'tcx> IntrinsicCallMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         unsafe {
             llvm::LLVMPositionBuilderAtEnd(self.llbuilder, bb);
         }
-        println!("calling llvm.orphaning.syncregion");
+        debug!("calling llvm.orphaning.syncregion");
         self.call_intrinsic("llvm.orphaning.syncregion", &[token]);
     }
 
