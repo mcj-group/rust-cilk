@@ -144,6 +144,7 @@ impl MutVisitor for CilkControlFlow<'_> {
                 mut_visit::walk_expr(self, e);
                 self.inner_labels.pop();
             }
+            ExprKind::Closure(_) => {}
             _ => mut_visit::walk_expr(self, e),
         };    
     }
