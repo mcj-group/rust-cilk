@@ -93,22 +93,57 @@ impl MutVisitor for ReplaceVariable<'_> {
 struct CilkControlFlow<'a> {
     // is_cilk_for: bool,
     dcx: &'a DiagCtxtHandle<'a>,
+    // the label of the cilk_for if applicable
+    outer_label: Option<Label>,
+    // labels of any loops within the task
+    inner_labels: Vec<Option<Label>>,
+}
+
+impl<'a> CilkControlFlow<'a> {
+    fn new(dcx: &'a DiagCtxtHandle<'a>, outer_label: Option<Label>) -> CilkControlFlow<'a> {
+        CilkControlFlow { dcx, outer_label, inner_labels: Vec::new() }
+    }
 }
 
 impl MutVisitor for CilkControlFlow<'_> {
     fn visit_expr(&mut self, e: &mut Expr) {
         let Expr { kind, span, .. } = e;
+
         match kind {
-            // todo: check break label
-            ExprKind::Break(_, _) => { 
-                *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("break") }));
+            ExprKind::Break(label, _) => {
+                if label.is_none() && self.inner_labels.is_empty() || label.is_some() && !self.inner_labels.contains(label) {
+                    *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("break") }));
+                } else {
+                    mut_visit::walk_expr(self, e);
+                }
             },
-            ExprKind::Continue(_) => {
-                *kind = ExprKind::Reattach;
+            ExprKind::Continue(label) => {
+                if label.is_some() && *label == self.outer_label || label.is_none() && self.inner_labels.is_empty() {
+                    *kind = ExprKind::Reattach;
+                } else if label.is_some() && !self.inner_labels.contains(label) {
+                    *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("continue") }));
+                } else {
+                    mut_visit::walk_expr(self, e);
+                }
             },
             ExprKind::Ret(_) => {
                 *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("return") }));
             },
+            ExprKind::While(_, _, label) => {
+                self.inner_labels.push(*label);
+                mut_visit::walk_expr(self, e);
+                self.inner_labels.pop();
+            }
+            ExprKind::ForLoop { label, .. } => {
+                self.inner_labels.push(*label);
+                mut_visit::walk_expr(self, e);
+                self.inner_labels.pop();
+            }
+            ExprKind::Loop(_, label, _) => {
+                self.inner_labels.push(*label);
+                mut_visit::walk_expr(self, e);
+                self.inner_labels.pop();
+            }
             _ => mut_visit::walk_expr(self, e),
         };    
     }
@@ -1989,9 +2024,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     self.resolver.partial_res_map.insert(*node_id, shadow_res);
                 }
 
-                let mut cf_visitor = CilkControlFlow {
-                    dcx: &self.dcx(),
-                };
+                let dcx = self.dcx();
+                let mut cf_visitor = CilkControlFlow::new(&dcx, opt_label);
                 cf_visitor.visit_block(&mut body_clone);
 
                 let body_block = self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));

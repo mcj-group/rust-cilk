@@ -535,3 +535,11 @@ pub(crate) struct BadControlFlowInCilkFor {
     pub span: Span,
     pub keyword: String,
 }
+
+// #[derive(Diagnostic)]
+// #[diag("cannot use `{$keyword}` within cilk_spawn")]
+// pub(crate) struct BadControlFlowInCilkSpawn {
+//     #[primary_span]
+//     pub span: Span,
+//     pub keyword: String,
+// }
