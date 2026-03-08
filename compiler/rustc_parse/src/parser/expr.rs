@@ -1666,6 +1666,8 @@ impl<'a> Parser<'a> {
             self.parse_expr_while(label, lo)
         } else if self.eat_keyword(kw::For) {
             self.parse_expr_for(label, lo)
+        } else if self.eat_keyword(kw::CilkFor) {
+            self.parse_expr_cilk_for(label, lo)
         } else if self.eat_keyword(kw::Loop) {
             self.parse_expr_loop(label, lo)
         } else if self.check_noexpect(&token::OpenDelim(Delimiter::Brace))
