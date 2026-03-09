@@ -484,7 +484,9 @@ impl<'a, 'typeck, 'tcx> LivenessContext<'a, 'typeck, 'tcx> {
             // a much, much smaller domain: in our benchmarks, when it's not zero (the most likely
             // case), there are a few dozens compared to e.g. thousands or tens of thousands of
             // locals and move paths.
-            let flow_inits = MaybeInitializedPlaces::new(tcx, body, self.move_data)
+            let task_info = TaskInfo::from_body(body);
+            let maybe_synced_tasks = maybe_synced_tasks(tcx, body, &task_info);
+            let flow_inits = MaybeInitializedPlaces::new(tcx, body, self.move_data, &task_info, &maybe_synced_tasks)
                 .iterate_to_fixpoint(tcx, body, Some("borrowck"))
                 .into_results_cursor(body);
             flow_inits

@@ -19,7 +19,6 @@ use tracing::instrument;
 use smallvec::SmallVec;
 
 use crate::fmt::DebugWithContext;
-use crate::lattice::Dual;
 use crate::task_info::{Task, TaskInfo};
 use crate::{Analysis, Forward, GenKill, Results, ResultsCursor};
 
@@ -52,15 +51,15 @@ pub struct DefinitelySyncableTasks<'task_info> {
     // We use a sparse representation here with a HashMap rather than an IndexVec because
     // there are probably many fewer continuation headers than there are basic blocks in
     // a function body.
-    saved_reattach_state: FxHashMap<mir::BasicBlock, Dual<DenseBitSet<Task>>>,
+    saved_reattach_state: FxHashMap<mir::BasicBlock, DenseBitSet<Task>>,
 }
 
 impl<'task_info> DefinitelySyncableTasks<'task_info> {
-    fn cache_reattach_state(&mut self, block: mir::BasicBlock, output_state: Dual<DenseBitSet<Task>>) {
+    fn cache_reattach_state(&mut self, block: mir::BasicBlock, output_state: DenseBitSet<Task>) {
         self.saved_reattach_state.insert(block, output_state);
     }
 
-    fn get_reattach_state(&self, current_block: mir::BasicBlock) -> Option<&Dual<DenseBitSet<Task>>> {
+    fn get_reattach_state(&self, current_block: mir::BasicBlock) -> Option<&DenseBitSet<Task>> {
         self.saved_reattach_state.get(&current_block)
     }
 
@@ -79,13 +78,13 @@ impl<'task_info> DefinitelySyncableTasks<'task_info> {
         // This is because in the handling of Reattach, we'll have cached the dataflow state so that it can
         // be merged into the continuation header that we're seeing now.
         if let Some(state) = self.get_reattach_state(location.block) {
-            trans.gen_all(state.0.iter());
+            trans.gen_all(state.iter());
         }
     }
 }
 
 impl<'tcx, 'task_info> Analysis<'tcx> for DefinitelySyncableTasks<'task_info> {
-    type Domain = Dual<DenseBitSet<Task>>;
+    type Domain = DenseBitSet<Task>;
     type Direction = Forward;
 
     const NAME: &'static str = "definitely_syncable_tasks";
@@ -96,12 +95,12 @@ impl<'tcx, 'task_info> Analysis<'tcx> for DefinitelySyncableTasks<'task_info> {
         // blocks see what they get from their predecessors. It's just
         // that our join operator is intersection so we need the
         // bottom value to be the identity.
-        Dual(DenseBitSet::new_filled(self.task_info.num_tasks()))
+        DenseBitSet::new_filled(self.task_info.num_tasks())
     }
 
     fn initialize_start_block(&self, _body: &mir::Body<'tcx>, state: &mut <Self as Analysis<'tcx>>::Domain) {
         // Task 0 is initially executing at the beginning of the start block.
-        state.0.clear();
+        state.clear();
         state.gen_(Task::from_usize(0));
     }
 
@@ -342,7 +341,7 @@ impl DefinitelySyncedTasks {
             before.0
         })
         .map(|(location, tasks): (mir::Location, SmallVec<_>)| {
-            let tasks: SmallVec<[Task; 2]> = tasks.iter().collect();
+            let tasks: SmallVec<[Task; 2]> = tasks.into_iter().collect();
             (location, tasks)
         })
         .collect();

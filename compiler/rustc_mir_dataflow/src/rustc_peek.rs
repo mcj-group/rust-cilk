@@ -12,7 +12,7 @@ use crate::errors::{
 use crate::framework::BitSetExt;
 use crate::move_paths::{HasMoveData, LookupResult, MoveData, MovePathIndex};
 use crate::impls::{
-    definitely_synced_tasks, maybe_synced_tasks, DefinitelyInitializedPlaces,
+    definitely_synced_tasks, maybe_synced_tasks,
     MaybeInitializedPlaces, MaybeLiveLocals, MaybeUninitializedPlaces,
 };
 use crate::task_info::TaskInfo;
@@ -23,15 +23,16 @@ pub fn sanity_check<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) {
     if let Some(kind) = find_attr!(tcx, def_id, RustcMir(kind) => kind) {
         let move_data = MoveData::gather_moves(body, tcx, |_| true);
         debug!("running rustc_peek::SanityCheck on {}", tcx.def_path_str(def_id));
+        let task_info = TaskInfo::from_body(body);
+        let maybe_synced_tasks = maybe_synced_tasks(tcx, body, &task_info);
+
         if kind.contains(&RustcMirKind::PeekMaybeInit) {
-            let flow_inits = MaybeInitializedPlaces::new(tcx, body, &move_data)
+            let flow_inits = MaybeInitializedPlaces::new(tcx, body, &move_data, &task_info, &maybe_synced_tasks)
                 .iterate_to_fixpoint(tcx, body, None)
                 .into_results_cursor(body);
             sanity_check_via_rustc_peek(tcx, flow_inits);
         }
 
-        let task_info = TaskInfo::from_body(body);
-        let maybe_synced_tasks = maybe_synced_tasks(tcx, body, &task_info);
         let definitely_synced_tasks = definitely_synced_tasks(tcx, body, &task_info);
 
         if kind.contains(&RustcMirKind::PeekMaybeUninit) {

@@ -247,6 +247,8 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
 
     mark_inactive_variants_as_uninit: bool,
     include_inactive_in_otherwise: bool,
+    skip_unreachable_unwind: DenseBitSet<mir::BasicBlock>,
+
     /// See [MaybeInitializedPlaces::task_info].
     task_info: &'a TaskInfo,
     definitely_synced_tasks: &'a DefinitelySyncedTasks,

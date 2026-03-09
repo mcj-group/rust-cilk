@@ -209,6 +209,7 @@ impl TerminatorKind {
             Call { target: Some(t), unwind: UnwindAction::Cleanup(u), .. }
             | Drop { target: t, unwind: UnwindAction::Cleanup(u), .. }
             | Assert { target: t, unwind: UnwindAction::Cleanup(u), .. }
+            | Detach {spawned_task: t, continuation: u}
             | InlineAsm { destination: Some(t), unwind: UnwindAction::Cleanup(u), .. } => {
                 vec![t, u]
             }
@@ -217,6 +218,8 @@ impl TerminatorKind {
             | Call { target: Some(t), unwind: _, .. }
             | Drop { target: t, unwind: _, .. }
             | Assert { target: t, unwind: _, .. }
+            | Reattach { continuation: t, .. }
+            | Sync { target: t }
             | InlineAsm { destination: None, unwind: UnwindAction::Cleanup(t), .. }
             | InlineAsm { destination: Some(t), unwind: _, .. } => {
                 vec![t]
@@ -241,7 +244,11 @@ impl TerminatorKind {
             | TerminatorKind::Unreachable
             | TerminatorKind::Resume
             | TerminatorKind::Abort
-            | TerminatorKind::SwitchInt { .. } => None,
+            | TerminatorKind::SwitchInt { .. }
+            // NOTE(jhilton): if unwind behavior changes for spawned tasks, change this code :)
+            | TerminatorKind::Detach { spawned_task: _, continuation: _ }
+            | TerminatorKind::Reattach { continuation: _ }
+            | TerminatorKind::Sync { target: _ } => None,
             TerminatorKind::Call { ref unwind, .. }
             | TerminatorKind::Assert { ref unwind, .. }
             | TerminatorKind::Drop { ref unwind, .. }
