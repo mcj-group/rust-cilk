@@ -1,9 +1,9 @@
 #![feature(cilk)]
 // Tests that scope can return an uninitialized variable.
 
-// build-pass
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ build-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn main() {
     let x = cilk_scope {

@@ -510,8 +510,12 @@ impl<'tcx> Stable<'tcx> for mir::NonDivergingIntrinsic<'tcx> {
                     count: copy_non_overlapping.count.stable(tables, cx),
                 })
             }
-            NonDivergingIntrinsic::TapirRuntimeStart => crate::mir::NonDivergingIntrinsic::TapirRuntimeStart,
-            NonDivergingIntrinsic::TapirRuntimeStop => crate::mir::NonDivergingIntrinsic::TapirRuntimeStop
+            NonDivergingIntrinsic::TapirRuntimeStart => {
+                crate::mir::NonDivergingIntrinsic::TapirRuntimeStart
+            }
+            NonDivergingIntrinsic::TapirRuntimeStop => {
+                crate::mir::NonDivergingIntrinsic::TapirRuntimeStop
+            }
         }
     }
 }
@@ -725,23 +729,16 @@ impl<'tcx> Stable<'tcx> for mir::TerminatorKind<'tcx> {
             mir::TerminatorKind::UnwindResume => TerminatorKind::Resume,
             mir::TerminatorKind::UnwindTerminate(_) => TerminatorKind::Abort,
             mir::TerminatorKind::Return => TerminatorKind::Return,
-            mir::TerminatorKind::Detach {
-                spawned_task,
-                continuation
-            } => TerminatorKind::Detach {
+            mir::TerminatorKind::Detach { spawned_task, continuation } => TerminatorKind::Detach {
                 spawned_task: spawned_task.as_usize(),
-                continuation: continuation.as_usize()
+                continuation: continuation.as_usize(),
             },
-            mir::TerminatorKind::Reattach {
-                continuation
-            } => TerminatorKind::Reattach {
-                continuation: continuation.as_usize()
-            },
-            mir::TerminatorKind::Sync {
-                target
-            } => TerminatorKind::Sync {
-                target: target.as_usize()
-            },
+            mir::TerminatorKind::Reattach { continuation } => {
+                TerminatorKind::Reattach { continuation: continuation.as_usize() }
+            }
+            mir::TerminatorKind::Sync { target } => {
+                TerminatorKind::Sync { target: target.as_usize() }
+            }
             mir::TerminatorKind::Unreachable => TerminatorKind::Unreachable,
             mir::TerminatorKind::Drop {
                 place,

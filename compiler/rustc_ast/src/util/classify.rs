@@ -128,7 +128,7 @@ pub fn leading_labeled_expr(mut expr: &ast::Expr) -> bool {
             | Become(..)
             | Break(..)
             | Closure(..)
-            | CilkScope(..) // TODO(CAIATHEN) I don't really understand this
+            | CilkScope(..) // FIXME(CAIATHEN) I don't really understand this
             | CilkSpawn(..)
             | CilkSync
             | ConstBlock(..)

@@ -1,4 +1,3 @@
-
 #![feature(cilk)]
 // This tests that a simple cilk_for performs loop spawning.
 

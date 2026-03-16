@@ -951,7 +951,7 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr<'v>) 
         ExprKind::CilkSync => {}
         ExprKind::CilkScope(block) => {
             visitor.visit_block(block);
-        },
+        }
         ExprKind::Err(_) => {}
     }
     V::Result::output()

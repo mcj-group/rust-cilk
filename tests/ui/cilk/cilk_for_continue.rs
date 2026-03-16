@@ -1,9 +1,9 @@
 #![feature(cilk)]
 // Tests that a cilk_for loop with a continue in it is allowed to compile.
 
-// run-pass
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 use std::sync::atomic::AtomicU64;
 

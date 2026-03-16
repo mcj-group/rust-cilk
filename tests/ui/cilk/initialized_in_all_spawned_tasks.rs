@@ -4,9 +4,9 @@
 // particular task is known to be synced. Solutions will involve changing the liveness analysis
 // in more involved ways.
 
-// known-bug: unknown
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ known-bug: unknown
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn f() -> usize {
     let y;

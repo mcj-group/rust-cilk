@@ -365,11 +365,7 @@ impl Config {
     [llvm]
     download-ci-llvm = false
     ";
-            self.download_file(
-                &format!("{base}/{llvm_sha}/{filename}"),
-                &tarball,
-                help_on_error,
-            );
+            self.download_file(&format!("{base}/{llvm_sha}/{filename}"), &tarball, help_on_error);
         }
         let llvm_root = self.ci_llvm_root();
         self.unpack(&tarball, &llvm_root, "rust-dev");
@@ -394,11 +390,7 @@ impl Config {
     pub(crate) fn maybe_download_cilktools(&self) {
         let url = "https://github.com/OpenCilk/productivity-tools/archive/dev/17.x.tar.gz";
         let destination = Path::new("src/llvm-project/cilktools");
-        self.maybe_download_opencilk_component(
-            url,
-            destination,
-            "productivity-tools-dev",
-        );
+        self.maybe_download_opencilk_component(url, destination, "productivity-tools-dev");
     }
 
     fn maybe_download_opencilk_component(&self, url: &str, destination: &Path, prefix: &str) {

@@ -3,9 +3,9 @@
 // Currently fails because we kill borrows at the end of the block rather
 // than at the sync.
 
-// known-bug: unknown
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ known-bug: unknown
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 // This should be rejected since s is still referenced by the spawned block
 // and there's no sync to indicate that the borrow can be dropped.

@@ -2479,7 +2479,7 @@ impl Expr<'_> {
             // but we need to print `(let _ = a) < b` as-is with parens.
             | ExprKind::Let(..)
             | ExprKind::Unary(..) => ExprPrecedence::Prefix,
-            
+
             // Need parens if and only if there are prefix attributes.
             ExprKind::Array(_)
             | ExprKind::Block(..)

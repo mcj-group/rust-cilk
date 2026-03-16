@@ -10,7 +10,7 @@ fn cilk_for_for(){
     let c = 1000;
 
     let v_size = (b-a) * c;
-    let mut v = vec![0; v_size]; 
+    let mut v = vec![0; v_size];
     let start = Instant::now();
 
     cilk_for i in a..b {

@@ -481,7 +481,7 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             llvm::LLVMBuildSync(self.llbuilder, target, sync_region);
         }
     }
-    
+
     math_builder_methods! {
         add(a, b) => LLVMBuildAdd,
         fadd(a, b) => LLVMBuildFAdd,

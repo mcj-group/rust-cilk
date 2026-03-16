@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 
 use rustc_abi::Align;
-use rustc_hir::attrs::{InlineAttr, InstructionSetAttr, Linkage, OptimizeAttr, OrphaningAttr, RtsanSetting};
+use rustc_hir::attrs::{
+    InlineAttr, InstructionSetAttr, Linkage, OptimizeAttr, OrphaningAttr, RtsanSetting,
+};
 use rustc_hir::def_id::DefId;
 use rustc_macros::{HashStable, TyDecodable, TyEncodable};
 use rustc_span::Symbol;

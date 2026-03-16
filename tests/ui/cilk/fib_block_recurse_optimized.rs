@@ -1,9 +1,9 @@
 #![feature(cilk)]
 // Checks that a simple Cilk program compiles.
 
-// run-pass
-// compile-flags: -C panic=abort -O
-// no-prefer-dynamic
+//@ run-pass
+//@ compile-flags: -C panic=abort -O
+//@ no-prefer-dynamic
 
 fn fib(n: usize) -> usize {
     if n <= 1 {

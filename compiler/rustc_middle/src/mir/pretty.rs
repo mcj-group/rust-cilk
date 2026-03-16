@@ -721,7 +721,8 @@ impl<'de, 'tcx> MirWriter<'de, 'tcx> {
 
         // Basic block label at the top.
         let cleanup_text = if data.is_cleanup { " (cleanup)" } else { "" };
-        let parallel_loop_header = if data.is_parallel_loop_header { " (parallel-header)" } else { "" };
+        let parallel_loop_header =
+            if data.is_parallel_loop_header { " (parallel-header)" } else { "" };
         writeln!(w, "{INDENT}{block:?}{cleanup_text}{parallel_loop_header}: {{")?;
 
         // List of statements in the middle.

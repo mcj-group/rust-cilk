@@ -1,5 +1,6 @@
 //! Set and unset common attributes on LLVM values.
 use rustc_hir::attrs::RtsanSetting;
+pub(crate) use rustc_hir::attrs::{InlineAttr, InstructionSetAttr, OptimizeAttr, OrphaningAttr};
 use rustc_hir::def_id::DefId;
 use rustc_hir::find_attr;
 use rustc_middle::middle::codegen_fn_attrs::{
@@ -18,7 +19,6 @@ use crate::llvm::{
     self, AllocKindFlags, Attribute, AttributeKind, AttributePlace, MemoryEffects, Value,
 };
 use crate::{Session, attributes, llvm_util};
-pub(crate) use rustc_hir::attrs::{InlineAttr, InstructionSetAttr, OptimizeAttr, OrphaningAttr};
 
 pub(crate) fn apply_to_llfn(llfn: &Value, idx: AttributePlace, attrs: &[&Attribute]) {
     if !attrs.is_empty() {
@@ -104,7 +104,10 @@ fn patchable_function_entry_attrs<'ll>(
 }
 
 #[allow(dead_code)]
-fn orphaning_attr<'ll>(cx: &CodegenCx<'ll, '_>, orphaning: OrphaningAttr) -> Option<&'ll Attribute> {
+fn orphaning_attr<'ll>(
+    cx: &CodegenCx<'ll, '_>,
+    orphaning: OrphaningAttr,
+) -> Option<&'ll Attribute> {
     match orphaning {
         OrphaningAttr::Hint => Some(AttributeKind::Orphaning.create_attr(cx.llcx)),
         OrphaningAttr::None => None,

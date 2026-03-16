@@ -1889,14 +1889,14 @@ impl<'hir> LoweringContext<'_, 'hir> {
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
                 self.arena.alloc(self.expr_spawn_block(body_block))
                 // self.arena.alloc(
-                //     self.lower_expr_closure_2( 
-                //         // TODO: could I spit out some values for compilation of a real closure? Get it to spit out details for a microbenchmark with a real closure wrapping a cilk spawn, then copy it here
+                //     self.lower_expr_closure_2(
+                //         // FIXME: could I spit out some values for compilation of a real closure? Get it to spit out details for a microbenchmark with a real closure wrapping a cilk spawn, then copy it here
                 //         &ClosureBinder::NotPresent, // idk
                 //         CaptureBy::Value { move_kw: pat_span }, // idk
                 //         e.id, // idk, but check the stuff I did on Send/Sync
                 //         Const::No, // idk
                 //         Movability::Static, // idk
-                //         &FnDecl{ inputs: thin_vec![], output: FnRetTy::Default(pat_span)}, // TODO: is this the right span?
+                //         &FnDecl{ inputs: thin_vec![], output: FnRetTy::Default(pat_span)}, // FIXME: is this the right span?
                 //         body_block3,
                 //         pat_span, // idk
                 //         pat_span // idk

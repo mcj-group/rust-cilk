@@ -164,14 +164,14 @@ pub enum TerminatorKind {
     Return,
     Unreachable,
     Detach {
-        spawned_task: BasicBlockIdx, 
-        continuation: BasicBlockIdx
+        spawned_task: BasicBlockIdx,
+        continuation: BasicBlockIdx,
     },
     Reattach {
-        continuation: BasicBlockIdx
+        continuation: BasicBlockIdx,
     },
-    Sync{
-        target: BasicBlockIdx
+    Sync {
+        target: BasicBlockIdx,
     },
     Drop {
         place: Place,
@@ -209,7 +209,7 @@ impl TerminatorKind {
             Call { target: Some(t), unwind: UnwindAction::Cleanup(u), .. }
             | Drop { target: t, unwind: UnwindAction::Cleanup(u), .. }
             | Assert { target: t, unwind: UnwindAction::Cleanup(u), .. }
-            | Detach {spawned_task: t, continuation: u}
+            | Detach { spawned_task: t, continuation: u }
             | InlineAsm { destination: Some(t), unwind: UnwindAction::Cleanup(u), .. } => {
                 vec![t, u]
             }

@@ -1,9 +1,9 @@
 #![feature(cilk)]
 // Checks that spawning a closure twice is accepted.
 
-// build-pass
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ build-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn main() {
     foo();

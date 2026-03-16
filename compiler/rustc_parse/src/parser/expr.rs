@@ -2999,7 +2999,11 @@ impl<'a> Parser<'a> {
     }
 
     // Parses `cilk_for <src_pat> in <src_expr> <src_loop_block>` (`cilk_for` token already eaten).
-    fn parse_expr_cilk_for(&mut self, opt_label: Option<Label>, lo: Span) -> PResult<'a, Box<Expr>> {
+    fn parse_expr_cilk_for(
+        &mut self,
+        opt_label: Option<Label>,
+        lo: Span,
+    ) -> PResult<'a, Box<Expr>> {
         self.parse_expr_for_any_kind(opt_label, lo, |_this| ForLoopKind::CilkFor)
     }
 

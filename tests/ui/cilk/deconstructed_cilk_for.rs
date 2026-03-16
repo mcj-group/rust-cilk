@@ -4,13 +4,13 @@ fn main(){
     deconstructed_cilk_for();
 }
 
-fn deconstructed_cilk_for(){ 
+fn deconstructed_cilk_for(){
     let a = 0;
     let b = 10;
     let c = 100;
 
     let v_size = (b-a) * c;
-    let mut v = vec![0; v_size]; 
+    let mut v = vec![0; v_size];
 
     for i in a..b {
         (#[inline(always)] #[orphaning]|| {

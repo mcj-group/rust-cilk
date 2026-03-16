@@ -167,7 +167,9 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
             }
             TerminatorKind::Goto { .. } | TerminatorKind::Return => {}
             TerminatorKind::UnwindTerminate(..) => {}
-            TerminatorKind::Detach { .. } | TerminatorKind::Reattach { .. } | TerminatorKind::Sync { .. } => {}
+            TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => {}
             kind @ (TerminatorKind::FalseUnwind { .. }
             | TerminatorKind::FalseEdge { .. }
             | TerminatorKind::Yield { .. }

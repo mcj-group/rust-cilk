@@ -305,7 +305,12 @@ fn process_builtin_attrs(
 
 /// Applies overrides for codegen fn attrs. These often have a specific reason why they're necessary.
 /// Please comment why when adding a new one!
-fn apply_overrides(tcx: TyCtxt<'_>, did: LocalDefId, attrs: &[hir::Attribute], codegen_fn_attrs: &mut CodegenFnAttrs) {
+fn apply_overrides(
+    tcx: TyCtxt<'_>,
+    did: LocalDefId,
+    attrs: &[hir::Attribute],
+    codegen_fn_attrs: &mut CodegenFnAttrs,
+) {
     // Apply the minimum function alignment here. This ensures that a function's alignment is
     // determined by the `-C` flags of the crate it is defined in, not the `-C` flags of the crate
     // it happens to be codegen'd (or const-eval'd) in.

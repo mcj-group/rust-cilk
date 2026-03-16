@@ -567,9 +567,7 @@ mod helper {
                 | Assert { target: ref t, unwind: _, .. }
                 | FalseUnwind { real_target: ref t, unwind: _ }
                 | Reattach { continuation: ref t, .. }
-                | Sync { target: ref t } => {
-                    mk_successors(slice::from_ref(t), None, None)
-                }
+                | Sync { target: ref t } => mk_successors(slice::from_ref(t), None, None),
                 // No successors
                 UnwindResume
                 | UnwindTerminate(_)
@@ -588,7 +586,7 @@ mod helper {
                 FalseEdge { ref real_target, imaginary_target } => {
                     mk_successors(slice::from_ref(real_target), Some(imaginary_target), None)
                 }
-                Detach {spawned_task: ref task, continuation: cont} => {
+                Detach { spawned_task: ref task, continuation: cont } => {
                     mk_successors(slice::from_ref(task), Some(cont), None)
                 }
             }
@@ -627,7 +625,7 @@ mod helper {
                         f(u)
                     }
                 }
-                Detach {spawned_task, continuation} => {
+                Detach { spawned_task, continuation } => {
                     f(spawned_task);
                     f(continuation);
                 }

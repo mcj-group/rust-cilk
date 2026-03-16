@@ -4,8 +4,8 @@
 // this should restrict implementations only to those which accurately track which tasks are synced
 // at a sync.
 
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn f() -> usize {
     let y = 5;

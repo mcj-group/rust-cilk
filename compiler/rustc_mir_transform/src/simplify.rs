@@ -164,8 +164,7 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
 
                 // Collect the current successors before mutating, so we can
                 // call collapse_goto_chain (which also borrows self) in the loop.
-                let old_successors: SmallVec<[BasicBlock; 4]> =
-                    terminator.successors().collect();
+                let old_successors: SmallVec<[BasicBlock; 4]> = terminator.successors().collect();
                 let mut new_successors: SmallVec<[BasicBlock; 4]> = old_successors.clone();
                 for new_succ in &mut new_successors {
                     self.collapse_goto_chain(new_succ, &mut changed);

@@ -2,8 +2,8 @@
 // Tests that when we sync conditionally spawned tasks, the liveness analysis correctly considers
 // the variables uninitialized.
 
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn f() -> usize {
     let y;

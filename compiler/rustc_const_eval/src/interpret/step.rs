@@ -628,8 +628,13 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             Unreachable => throw_ub!(Unreachable),
 
             // These should never occur for MIR we actually run.
-            FalseEdge { .. } | FalseUnwind { .. } | Yield { .. } | CoroutineDrop
-            | Detach { .. } | Reattach { .. } | Sync { .. } => span_bug!(
+            FalseEdge { .. }
+            | FalseUnwind { .. }
+            | Yield { .. }
+            | CoroutineDrop
+            | Detach { .. }
+            | Reattach { .. }
+            | Sync { .. } => span_bug!(
                 terminator.source_info.span,
                 "{:#?} should have been eliminated by MIR pass",
                 terminator.kind

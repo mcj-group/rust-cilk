@@ -1,9 +1,9 @@
 #![feature(cilk)]
 // Tests that a cilk_for loop with a return in it fails to compile.
 
-// known-bug: unknown
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ known-bug: unknown
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 use std::sync::atomic::AtomicU64;
 

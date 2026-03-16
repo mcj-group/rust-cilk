@@ -11,7 +11,7 @@ fn cilk_for_in_cilk_spawn() {
     let c = 100;
 
     let v_size = b * c;
-    let mut v = vec![0; v_size]; 
+    let mut v = vec![0; v_size];
 
     cilk_spawn{
         cilk_for i in a..b {

@@ -202,6 +202,10 @@ Tests for the `--check-cfg` compiler mechanism  for checking cfg configurations,
 
 See [Checking conditional configurations | The rustc book](https://doc.rust-lang.org/rustc/check-cfg.html).
 
+## `tests/ui/cilk`
+
+Tests for the `cilk` feature, which provides Cilk-style fork-join parallelism via `cilk_spawn`, `cilk_sync`, and `cilk_for` constructs.
+
 ## `tests/ui/closure-expected-type/`: Closure type inference
 
 Tests targeted at how we deduce the types of closure arguments. This process is a result of some heuristics which take into account the *expected type* we have alongside the *actual types* that we get from inputs.

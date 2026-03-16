@@ -59,4 +59,8 @@ ignore = [
     # Rustfmt doesn't support use closures yet
     "tests/mir-opt/ergonomic-clones/closure.rs",
     "tests/codegen-llvm/ergonomic-clones/closure.rs",
+
+    # Cilk/OpenCilk tests use custom syntax not supported by standard rustfmt
+    "/tests/mir-opt/cilk/",
+    "/tests/codegen/cilk/",
 ]

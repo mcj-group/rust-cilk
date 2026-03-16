@@ -1077,7 +1077,8 @@ extern "C" void LLVMRustGlobalAddMetadata(LLVMValueRef Global, unsigned Kind,
 }
 
 extern "C" LLVMMetadataRef LLVMRustMDGetTemporary(LLVMContextRef C) {
-    return wrap(llvm::MDNode::getTemporary(*unwrap(C), llvm::ArrayRef<llvm::Metadata*>{}).release());
+    return wrap(llvm::MDNode::getTemporary(
+        *unwrap(C), llvm::ArrayRef<llvm::Metadata*>{}).release());
 }
 
 extern "C" void LLVMRustMDDeleteTemporary(LLVMMetadataRef MD) {
@@ -1097,19 +1098,19 @@ extern "C" LLVMValueRef LLVMBuildDetach(
     LLVMBuilderRef B, LLVMBasicBlockRef Task,
     LLVMBasicBlockRef Continuation, LLVMValueRef SyncRegion
 ) {
-    llvm_unreachable("LLVMBuildDetach requires OpenCilk LLVM");
+    llvm::report_fatal_error("LLVMBuildDetach requires OpenCilk LLVM");
 }
 
 extern "C" LLVMValueRef LLVMBuildReattach(
     LLVMBuilderRef B, LLVMBasicBlockRef Continuation, LLVMValueRef SyncRegion
 ) {
-    llvm_unreachable("LLVMBuildReattach requires OpenCilk LLVM");
+    llvm::report_fatal_error("LLVMBuildReattach requires OpenCilk LLVM");
 }
 
 extern "C" LLVMValueRef LLVMBuildSync(
     LLVMBuilderRef B, LLVMBasicBlockRef Target, LLVMValueRef SyncRegion
 ) {
-    llvm_unreachable("LLVMBuildSync requires OpenCilk LLVM");
+    llvm::report_fatal_error("LLVMBuildSync requires OpenCilk LLVM");
 }
 #endif // LLVM_OPENCILK
 

@@ -3,9 +3,9 @@
 // At some point we would expect this to fail since it has concurrent
 // mutable access to the iterator, so this is marked as known-bug.
 
-// known-bug: unknown
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ known-bug: unknown
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 struct Ptr<T>(*mut T);
 

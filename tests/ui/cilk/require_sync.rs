@@ -3,9 +3,9 @@
 // Currently fails because we don't check that variables have the right traits for how they're
 // used in spawned blocks.
 
-// known-bug: unknown
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ known-bug: unknown
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 use std::cell::RefCell;
 use std::rc::Rc;

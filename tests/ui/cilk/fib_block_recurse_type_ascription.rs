@@ -1,8 +1,8 @@
 // Checks that a simple Cilk program compiles, with type ascription.
 
-// run-pass
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn fib(n: usize) -> usize {
     if n <= 1 {

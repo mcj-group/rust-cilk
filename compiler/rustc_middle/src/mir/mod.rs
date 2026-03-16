@@ -1326,7 +1326,7 @@ impl<'tcx> BasicBlockData<'tcx> {
         statements: Vec<Statement<'tcx>>,
         terminator: Option<Terminator<'tcx>>,
         is_cleanup: bool,
-        is_parallel_loop_header: bool
+        is_parallel_loop_header: bool,
     ) -> BasicBlockData<'tcx> {
         BasicBlockData {
             statements,

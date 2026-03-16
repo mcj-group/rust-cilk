@@ -1448,7 +1448,7 @@ where
             statements,
             Some(Terminator { source_info: self.source_info, kind: k }),
             unwind.is_cleanup(),
-            false
+            false,
         ))
     }
 

@@ -403,7 +403,7 @@ declare_features! (
     /// Allows to use the `#[cfi_encoding = ""]` attribute.
     (unstable, cfi_encoding, "1.71.0", Some(89653)),
     /// Allows using cilk keywords like cilk_spawn and cilk_sync.
-    (unstable, cilk, "CURRENT_RUSTC_VERSION", None),
+    (unstable, cilk, "CURRENT_RUSTC_VERSION", Some(999999)),
     /// Allows `for<...>` on closures and coroutines.
     (unstable, closure_lifetime_binder, "1.64.0", Some(97362)),
     /// Allows `#[track_caller]` on closures and coroutines.

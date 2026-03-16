@@ -1,6 +1,7 @@
-use crate::spec::base::apple::{Arch, TargetEnv, base};
-use crate::spec::{Os, SanitizerSet, LinkerFlavor, Cc, Lld, Target, TargetMetadata, TargetOptions};
 use std::path::PathBuf;
+
+use crate::spec::base::apple::{Arch, TargetEnv, base};
+use crate::spec::{Cc, LinkerFlavor, Lld, Os, SanitizerSet, Target, TargetMetadata, TargetOptions};
 
 // Read the environment variable OPENCILK_RT_SEARCH_DIR to get the path to the OpenCilk runtime for
 // this target.

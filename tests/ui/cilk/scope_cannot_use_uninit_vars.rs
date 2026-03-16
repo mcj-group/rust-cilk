@@ -1,8 +1,8 @@
 #![feature(cilk)]
 // Tests that scope can't return a value resulting from uninitialized variables.
 
-// compile-flags: -C panic=abort
-// no-prefer-dynamic
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn fib(n: u8) -> usize {
     if n <= 1 {
