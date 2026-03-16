@@ -1312,7 +1312,7 @@ fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
 
     // On OS X, the name of the OpenCilk runtime library is different if we're dynamically linking,
     // and is generally different from the name on other platforms.
-    let name = if sess.target.is_like_osx {
+    let name = if sess.target.is_like_darwin {
         if sess.opts.cg.prefer_dynamic { "opencilk_osx_dynamic" } else { "opencilk_osx" }
     } else {
         "opencilk"
@@ -1331,7 +1331,7 @@ fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
         // We can't use a relative path because moving the binary would break the rpath,
         // even if we used $ORIGIN since the OpenCilk runtime won't move with the binary.
         let rpath = opencilk_runtime_search_dir.to_str().expect("non-utf8 component in path");
-        linker.args(&["-Wl,-rpath", "-Xlinker", rpath]);
+        linker.cmd().args(["-Wl,-rpath", "-Xlinker", rpath]);
 
         let as_needed = true;
         linker.link_dylib_by_name(name, verbatim, as_needed);
@@ -1339,8 +1339,7 @@ fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
         // We don't need to use the whole archive option since we probably aren't re-exporting all
         // the symbols from the OpenCilk runtime.
         let whole_archive = false;
-        let search_paths = SearchPaths::default();
-        linker.link_staticlib_by_name(name, verbatim, whole_archive, &search_paths);
+        linker.link_staticlib_by_name(name, verbatim, whole_archive);
     }
 }
 

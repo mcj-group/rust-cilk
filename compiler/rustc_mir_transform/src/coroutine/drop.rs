@@ -117,6 +117,7 @@ fn build_pin_fut<'tcx>(
             },
         }),
         false,
+        false,
     ));
     (pin_fut_bb, fut_pin_place)
 }
@@ -175,6 +176,7 @@ fn build_poll_switch<'tcx>(
                 ),
             },
         }),
+        false,
         false,
     ))
 }

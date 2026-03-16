@@ -205,7 +205,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 this.cfg.goto(short_circuit, source_info, target);
                 target.unit()
             }
-            ExprKind::Loop { body } => {
+            ExprKind::Loop { body, tapir_loop_spawn: _ } => {
                 // [block]
                 //    |
                 //   [loop_block] -> [body_block] -/eval. body/-> [body_block_end]
@@ -847,6 +847,65 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 );
                 this.coroutine_drop_cleanup(block);
                 resume.unit()
+            }
+
+            ExprKind::CilkSpawn { computation } => {
+                // Terminate the current block with a Detach. Connect the detach to 2 new basic
+                // blocks: the spawned computation (left) and the continuation (right).
+                let mut spawned_task = this.cfg.start_new_block();
+                let continuation = this.cfg.start_new_block();
+
+                this.cfg.terminate(
+                    block,
+                    source_info,
+                    TerminatorKind::Detach { spawned_task, continuation },
+                );
+
+                let spawned_result =
+                    unpack!(spawned_task = this.as_local_rvalue(spawned_task, computation));
+
+                // Store the spawned result into the destination before reattaching.
+                this.cfg.push_assign(spawned_task, source_info, destination, spawned_result);
+
+                let task_span = this.thir[computation].span;
+                let task_source_info = this.source_info(task_span);
+                this.cfg.terminate(
+                    spawned_task,
+                    task_source_info,
+                    TerminatorKind::Reattach { continuation },
+                );
+
+                block = continuation;
+                block.unit()
+            }
+
+            ExprKind::CilkScope { block: ast_block } => {
+                // Give a hint to start the runtime at the beginning of the scope.
+                let start_runtime_kind =
+                    StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TapirRuntimeStart));
+                let start_runtime = Statement::new(source_info, start_runtime_kind);
+                this.cfg.push(block, start_runtime);
+
+                // Generate the code for the block and end it in a sync.
+                unpack!(block = this.ast_block(destination, block, ast_block, source_info));
+                let next_block = this.cfg.start_new_block();
+                this.cfg.terminate(block, source_info, TerminatorKind::Sync { target: next_block });
+                block = next_block;
+
+                // Give a hint to stop the runtime at the end of the scope.
+                let end_runtime_kind =
+                    StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TapirRuntimeStop));
+                let end_runtime = Statement::new(source_info, end_runtime_kind);
+                this.cfg.push(block, end_runtime);
+
+                block.unit()
+            }
+
+            ExprKind::CilkSync => {
+                let next_block = this.cfg.start_new_block();
+                this.cfg.terminate(block, source_info, TerminatorKind::Sync { target: next_block });
+                block = next_block;
+                block.unit()
             }
 
             // these are the cases that are more naturally handled by some other mode

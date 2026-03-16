@@ -139,6 +139,9 @@ fn filtered_terminator_span(terminator: &Terminator<'_>) -> Option<Span> {
         | TerminatorKind::Yield { .. }
         | TerminatorKind::CoroutineDrop
         | TerminatorKind::FalseUnwind { .. }
-        | TerminatorKind::InlineAsm { .. } => Some(terminator.source_info.span),
+        | TerminatorKind::InlineAsm { .. }
+        | TerminatorKind::Detach { .. }
+        | TerminatorKind::Reattach { .. }
+        | TerminatorKind::Sync { .. } => Some(terminator.source_info.span),
     }
 }

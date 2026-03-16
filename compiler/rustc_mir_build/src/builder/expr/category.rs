@@ -58,7 +58,6 @@ impl Category {
             | ExprKind::Call { .. }
             | ExprKind::ByUse { .. }
             | ExprKind::InlineAsm { .. }
-            | ExprKind::InlineAsm { .. }
             | ExprKind::CilkSpawn { .. }
             | ExprKind::CilkScope { .. }
             // NOTE(jhilton): I think this makes sense. It doesn't really fit

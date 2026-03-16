@@ -330,6 +330,9 @@ fn is_temporary_rvalue(expr: &Expr<'_>) -> bool {
 
         ExprKind::UnsafeBinderCast(..) => false,
 
+        // Cilk/Tapir parallel execution constructs — not relevant to dangling reference analysis
+        ExprKind::CilkSpawn(_) | ExprKind::CilkScope(_) | ExprKind::CilkSync => false,
+
         // Not applicable
         ExprKind::Type(..) | ExprKind::Err(..) => false,
     }

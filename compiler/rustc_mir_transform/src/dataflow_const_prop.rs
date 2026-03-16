@@ -202,6 +202,8 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             }) => {
                 // This statement represents `*dst = *src`, `count` times.
             }
+            NonDivergingIntrinsic::TapirRuntimeStart
+            | NonDivergingIntrinsic::TapirRuntimeStop => {}
         }
     }
 
@@ -256,7 +258,10 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             | TerminatorKind::Assert { .. }
             | TerminatorKind::CoroutineDrop
             | TerminatorKind::FalseEdge { .. }
-            | TerminatorKind::FalseUnwind { .. } => {
+            | TerminatorKind::FalseUnwind { .. }
+            | TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => {
                 // These terminators have no effect on the analysis.
             }
         }

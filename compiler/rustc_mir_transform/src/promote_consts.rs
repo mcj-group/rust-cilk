@@ -739,7 +739,6 @@ impl<'a, 'tcx> Promoter<'a, 'tcx> {
                 kind: TerminatorKind::Return,
             }),
             false,
-            false,
         ))
     }
 

@@ -507,7 +507,6 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
             | hir::ExprKind::Lit(..)
             | hir::ExprKind::ConstBlock(..)
             | hir::ExprKind::OffsetOf(..)
-            | hir::ExprKind::CilkSync
             | hir::ExprKind::Err(_) => {}
 
             hir::ExprKind::Loop(blk, ..) => {
@@ -571,8 +570,13 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
                 self.consume_expr(value)?;
             }
 
-            hir::ExprKind::CilkSpawn(expr) => self.consume_expr(expr),
-            hir::ExprKind::CilkScope(block) => self.walk_block(block),
+            hir::ExprKind::CilkSpawn(expr) => {
+                self.consume_expr(expr)?;
+            }
+            hir::ExprKind::CilkScope(block) => {
+                self.walk_block(block)?;
+            }
+            hir::ExprKind::CilkSync => {}
         }
 
         Ok(())
@@ -1395,6 +1399,9 @@ impl<'tcx, Cx: TypeInformationCtxt<'tcx>, D: Delegate<'tcx>> ExprUseVisitor<'tcx
             | hir::ExprKind::InlineAsm(..)
             | hir::ExprKind::OffsetOf(..)
             | hir::ExprKind::UnsafeBinderCast(UnsafeBinderCastKind::Wrap, ..)
+            | hir::ExprKind::CilkSpawn(..)
+            | hir::ExprKind::CilkScope(..)
+            | hir::ExprKind::CilkSync
             | hir::ExprKind::Err(_) => Ok(self.cat_rvalue(expr.hir_id, expr_ty)),
         }
     }

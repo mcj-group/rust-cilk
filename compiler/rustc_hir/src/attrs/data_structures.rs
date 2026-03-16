@@ -141,6 +141,13 @@ pub enum InstructionSetAttr {
     ArmT32,
 }
 
+#[derive(Copy, Clone, PartialEq, Encodable, Decodable, Debug, HashStable_Generic, Default)]
+pub enum OrphaningAttr {
+    #[default]
+    None,
+    Hint,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default, PrintAttribute)]
 #[derive(Encodable, Decodable, HashStable_Generic)]
 pub enum OptimizeAttr {

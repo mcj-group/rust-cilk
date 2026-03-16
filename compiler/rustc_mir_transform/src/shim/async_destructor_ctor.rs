@@ -389,6 +389,7 @@ fn build_adrop_for_adrop_shim<'tcx>(
             },
         }),
         false,
+        false,
     ));
     // When dropping async drop coroutine, we continue its execution:
     // we call impl::poll (impl_layout, ctx)

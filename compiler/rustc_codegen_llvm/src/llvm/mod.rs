@@ -3,7 +3,6 @@
 use std::ffi::{CStr, CString};
 use std::num::NonZero;
 use std::ptr;
-use std::ops::Deref;
 use std::string::FromUtf8Error;
 
 use libc::c_uint;
@@ -468,23 +467,19 @@ pub(crate) fn add_alias<'ll>(
 ) -> &'ll Value {
     unsafe { LLVMAddAlias2(module, ty, address_space.0, aliasee, name.as_ptr()) }
 }
-pub struct TemporaryMetadataNode<'a> {
+pub(crate) struct TemporaryMetadataNode<'a> {
     raw: core::ptr::NonNull<Metadata>,
     phantom: core::marker::PhantomData<&'a mut Metadata>,
 }
 
 impl<'a> TemporaryMetadataNode<'a> {
-    pub fn new(llcx: &'a Context) -> Self {
+    pub(crate) fn new(llcx: &'a Context) -> Self {
         let temp = unsafe { ffi::LLVMRustMDGetTemporary(llcx) };
         Self { raw: temp.into(), phantom: core::marker::PhantomData }
     }
-}
 
-impl Deref for TemporaryMetadataNode<'_> {
-    type Target = Metadata;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { self.raw.as_ref() }
+    pub(crate) fn as_metadata(&self) -> &Metadata {
+        unsafe { &*self.raw.as_ptr() }
     }
 }
 

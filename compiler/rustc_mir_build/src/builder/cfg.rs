@@ -22,8 +22,9 @@ impl<'tcx> CFG<'tcx> {
         self.basic_blocks.push(BasicBlockData::new(None, false))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn start_new_parallel_loop_header(&mut self) -> BasicBlock {
-        let mut block_data = BasicBlockData::new(None);
+        let mut block_data = BasicBlockData::new(None, false);
         block_data.is_parallel_loop_header = true;
         self.basic_blocks.push(block_data)
     }

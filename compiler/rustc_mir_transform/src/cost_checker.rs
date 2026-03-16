@@ -87,6 +87,8 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
                 self.penalty += match **ndi {
                     NonDivergingIntrinsic::Assume(..) => INSTR_COST,
                     NonDivergingIntrinsic::CopyNonOverlapping(..) => CALL_PENALTY,
+                    NonDivergingIntrinsic::TapirRuntimeStart
+                    | NonDivergingIntrinsic::TapirRuntimeStop => INSTR_COST,
                 };
             }
             StatementKind::Assign(..) => self.penalty += INSTR_COST,
@@ -165,6 +167,7 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
             }
             TerminatorKind::Goto { .. } | TerminatorKind::Return => {}
             TerminatorKind::UnwindTerminate(..) => {}
+            TerminatorKind::Detach { .. } | TerminatorKind::Reattach { .. } | TerminatorKind::Sync { .. } => {}
             kind @ (TerminatorKind::FalseUnwind { .. }
             | TerminatorKind::FalseEdge { .. }
             | TerminatorKind::Yield { .. }
@@ -191,7 +194,10 @@ pub(super) fn is_call_like(terminator: &Terminator<'_>) -> bool {
         | UnwindResume
         | UnwindTerminate(_)
         | Return
-        | Unreachable => false,
+        | Unreachable
+        | Detach { .. }
+        | Reattach { .. }
+        | Sync { .. } => false,
 
         Yield { .. } | CoroutineDrop | FalseEdge { .. } | FalseUnwind { .. } => {
             unreachable!()

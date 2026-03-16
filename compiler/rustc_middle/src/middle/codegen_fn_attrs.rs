@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use rustc_abi::Align;
-use rustc_hir::attrs::{InlineAttr, InstructionSetAttr, Linkage, OptimizeAttr, RtsanSetting};
+use rustc_hir::attrs::{InlineAttr, InstructionSetAttr, Linkage, OptimizeAttr, OrphaningAttr, RtsanSetting};
 use rustc_hir::def_id::DefId;
 use rustc_macros::{HashStable, TyDecodable, TyEncodable};
 use rustc_span::Symbol;
@@ -62,6 +62,8 @@ pub struct CodegenFnAttrs {
     pub flags: CodegenFnAttrFlags,
     /// Parsed representation of the `#[inline]` attribute
     pub inline: InlineAttr,
+    /// Parsed representation of the `#[orphaning]` attribute
+    pub orphaning: OrphaningAttr,
     /// Parsed representation of the `#[optimize]` attribute
     pub optimize: OptimizeAttr,
     /// The name this function will be imported/exported under. This can be set
@@ -221,6 +223,7 @@ impl CodegenFnAttrs {
         CodegenFnAttrs {
             flags: CodegenFnAttrFlags::empty(),
             inline: InlineAttr::None,
+            orphaning: OrphaningAttr::None,
             optimize: OptimizeAttr::Default,
             symbol_name: None,
             link_ordinal: None,

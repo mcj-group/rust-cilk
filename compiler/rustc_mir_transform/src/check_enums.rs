@@ -250,6 +250,7 @@ fn split_block(
         block_data.statements.split_off(location.statement_index),
         block_data.terminator.take(),
         block_data.is_cleanup,
+        false,
     );
 
     basic_blocks.push(new_block)

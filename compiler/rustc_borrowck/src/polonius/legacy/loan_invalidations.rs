@@ -174,7 +174,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LoanInvalidationsGenerator<'a, 'tcx> {
                     self.location_table.start_index(continuation.start_location());
                 for (i, data) in borrow_set.iter_enumerated() {
                     if borrow_of_local_data(data.borrowed_place) {
-                        self.all_facts.loan_invalidated_at.push((end_spawned_task, i))
+                        self.facts.loan_invalidated_at.push((end_spawned_task, i))
                     }
                 }
             }

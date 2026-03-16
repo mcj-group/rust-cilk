@@ -419,8 +419,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             }
             ExprKind::Err(guar) => Ty::new_error(tcx, guar),
             ExprKind::CilkSpawn(expr) => self.check_expr(expr),
-            ExprKind::CilkScope(block) => self.check_block_with_expected(block, expected),
-            ExprKind::CilkSync => Ty::new_unit(tcx),
+            ExprKind::CilkScope(block) => self.check_expr_block(block, expected),
+            ExprKind::CilkSync => tcx.types.unit,
         }
     }
 

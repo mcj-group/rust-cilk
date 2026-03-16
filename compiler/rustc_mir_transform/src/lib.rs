@@ -127,6 +127,7 @@ declare_passes! {
     mod add_moves_for_packed_drops : AddMovesForPackedDrops;
     mod add_retag : AddRetag;
     mod add_subtyping_projections : Subtyper;
+    mod automatic_sync_insertion : InsertSyncs;
     mod check_inline : CheckForceInline;
     mod check_call_recursion : CheckCallRecursion, CheckDropRecursion;
     mod check_inline_always_target_features: CheckInlineAlwaysTargetFeature;

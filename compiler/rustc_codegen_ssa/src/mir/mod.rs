@@ -2,6 +2,7 @@ use std::iter;
 
 use rustc_index::IndexVec;
 use rustc_index::bit_set::DenseBitSet;
+use smallvec::SmallVec;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
 use rustc_middle::mir::{Body, Local, UnwindTerminateReason, traversal};
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, TyAndLayout};
@@ -130,7 +131,7 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
 
     /// We need to know the basic blocks terminated by back-edges that go into
     /// parallel loop headers. This is so we can annotate with the right metadata.
-    parallel_back_edges: BitSet<mir::BasicBlock>,
+    parallel_back_edges: DenseBitSet<mir::BasicBlock>,
 
     /// A stack of values returned from `tapir_runtime_start` for use in their corresponding `tapir_runtime_stop`
     /// call. We might need a more complex data structure than this if the token should ever be reused, but it's
@@ -253,7 +254,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         per_local_var_debug_info: None,
         caller_location: None,
         sync_region: None,
-        parallel_back_edges: BitSet::new_empty(mir.basic_blocks.len()),
+        parallel_back_edges: DenseBitSet::new_empty(mir.basic_blocks.len()),
         runtime_hint_stack: SmallVec::new(),
     };
 

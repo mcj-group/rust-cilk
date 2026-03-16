@@ -187,6 +187,9 @@ impl<'a, 'll, CX: Borrow<SCx<'ll>>> GenericBuilder<'a, 'll, CX> {
             llvm::LLVMSetAlignment(load, align.bytes() as c_uint);
             load
         }
+    }
+}
+
 impl MaybeSupportsTapir for Builder<'_, '_, '_> {
     fn supports_tapir() -> bool {
         true
@@ -861,14 +864,14 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             );
 
             // Now group the loop with all its associated nodes and assign the node to the branch.
-            let v = [&temp, tapir_metadata];
+            let v = [temp.as_metadata(), tapir_metadata];
             let node = llvm::LLVMMDNodeInContext2(self.cx.llcx, v.as_ptr(), v.len());
             // Make the node self-referential: this is what loops expect.
             llvm::LLVMRustReplaceMDOperandWith(node, 0, node);
 
             llvm::LLVMSetMetadata(
                 branch,
-                llvm::MD_loop as c_uint,
+                llvm::MD_loop,
                 llvm::LLVMMetadataAsValue(self.cx.llcx, node),
             )
         }

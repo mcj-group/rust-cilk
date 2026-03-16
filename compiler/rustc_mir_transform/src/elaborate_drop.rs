@@ -733,6 +733,7 @@ where
                 source_info: self.source_info,
             }),
             unwind.is_cleanup(),
+            false,
         );
         self.elaborator.patch().new_block(setup_bbd)
     }
@@ -750,7 +751,6 @@ where
                     kind: TerminatorKind::Unreachable,
                 }),
                 self.unwind.is_cleanup(),
-                false,
             ));
         }
 
@@ -1201,6 +1201,7 @@ where
             ],
             None,
             self.unwind.is_cleanup(),
+            false,
         );
 
         let array_place = mem::replace(
@@ -1434,7 +1435,6 @@ where
         self.elaborator.patch().new_block(BasicBlockData::new(
             Some(Terminator { source_info: self.source_info, kind: k }),
             unwind.is_cleanup(),
-            false
         ))
     }
 

@@ -1120,6 +1120,7 @@ unsafe extern "C" {
     pub(crate) fn LLVMIsAInstruction(Val: &Value) -> Option<&Value>;
     pub(crate) fn LLVMGetFirstBasicBlock(Fn: &Value) -> &BasicBlock;
     pub(crate) fn LLVMGetOperand(Val: &Value, Index: c_uint) -> Option<&Value>;
+    #[allow(dead_code)]
     pub(crate) fn LLVMGetDetachedCtx(BB: &BasicBlock) -> &BasicBlock;
 
     // Operations on call sites
@@ -1173,18 +1174,18 @@ unsafe extern "C" {
     pub(crate) fn LLVMBuildResume<'a>(B: &Builder<'a>, Exn: &'a Value) -> &'a Value;
     pub(crate) fn LLVMBuildUnreachable<'a>(B: &Builder<'a>) -> &'a Value;
     // Tapir terminators.
-    pub fn LLVMBuildDetach<'a>(
+    pub(crate) fn LLVMBuildDetach<'a>(
         B: &Builder<'a>,
         Task: &'a BasicBlock,
         Continuation: &'a BasicBlock,
         SyncRegion: &'a Value,
     ) -> &'a Value;
-    pub fn LLVMBuildReattach<'a>(
+    pub(crate) fn LLVMBuildReattach<'a>(
         B: &Builder<'a>,
         Continuation: &'a BasicBlock,
         SyncRegion: &'a Value,
     ) -> &'a Value;
-    pub fn LLVMBuildSync<'a>(
+    pub(crate) fn LLVMBuildSync<'a>(
         B: &Builder<'a>,
         Target: &'a BasicBlock,
         SyncRegion: &'a Value,

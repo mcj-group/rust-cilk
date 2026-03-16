@@ -1,5 +1,5 @@
 use rustc_abi::VariantIdx;
-use rustc_data_structures::{assert_matches, fx::FxHashMap};
+use rustc_data_structures::assert_matches;
 use rustc_index::Idx;
 use rustc_index::bit_set::{DenseBitSet, MixedBitSet};
 use rustc_middle::bug;
@@ -12,9 +12,6 @@ use smallvec::SmallVec;
 use tracing::{debug, instrument};
 
 use crate::drop_flag_effects::{DropFlagState, InactiveVariants};
-use crate::elaborate_drops::DropFlagState;
-use crate::framework::SwitchIntEdgeEffects;
-use crate::task_info::{Task, TaskInfo};
 use crate::move_paths::{HasMoveData, InitIndex, InitKind, LookupResult, MoveData, MovePathIndex};
 use crate::{
     Analysis, GenKill, MaybeReachable, drop_flag_effects, drop_flag_effects_for_function_entry,
@@ -101,8 +98,6 @@ impl<'tcx> MaybePlacesSwitchIntData<'tcx> {
     }
 }
 
-use super::syncable_tasks::{DefinitelySyncedTasks, MaybeSyncedTasks};
-
 /// `MaybeInitializedPlaces` tracks all places that might be
 /// initialized upon reaching a particular point in the control flow
 /// for a function.
@@ -145,27 +140,16 @@ pub struct MaybeInitializedPlaces<'a, 'tcx> {
     move_data: &'a MoveData<'tcx>,
     exclude_inactive_in_otherwise: bool,
     skip_unreachable_unwind: bool,
-    /// Stores information about tasks: their last locations, the spindles they contain, and their
-    /// parent-child relationships, for example.
-    task_info: &'a TaskInfo,
-    /// Maps locations to the tasks which may be synced at a given location (must be a sync).
-    maybe_synced_tasks: &'a MaybeSyncedTasks,
-    /// Maps locations to the state of the dataflow analysis at that location. The locations in this
-    /// map are the last locations of tasks.
-    state_at_last_locations: FxHashMap<Location, MaybeReachable<MixedBitSet<MovePathIndex>>>,
 }
 
 impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>, task_info: &'a TaskInfo, maybe_synced_tasks: &'a MaybeSyncedTasks) -> Self {
+    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
         MaybeInitializedPlaces {
             tcx,
             body,
             move_data,
             exclude_inactive_in_otherwise: false,
             skip_unreachable_unwind: false,
-            task_info,
-            maybe_synced_tasks,
-            state_at_last_locations: FxHashMap::default(),
         }
     }
 
@@ -248,16 +232,10 @@ pub struct MaybeUninitializedPlaces<'a, 'tcx> {
     mark_inactive_variants_as_uninit: bool,
     include_inactive_in_otherwise: bool,
     skip_unreachable_unwind: DenseBitSet<mir::BasicBlock>,
-
-    /// See [MaybeInitializedPlaces::task_info].
-    task_info: &'a TaskInfo,
-    definitely_synced_tasks: &'a DefinitelySyncedTasks,
-    /// See [MaybeInitializedPlaces::state_at_last_locations].
-    state_at_last_locations: FxHashMap<Location, MixedBitSet<MovePathIndex>>,
 }
 
 impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>, task_info: &'a TaskInfo, definitely_synced_tasks: &'a DefinitelySyncedTasks,) -> Self {
+    pub fn new(tcx: TyCtxt<'tcx>, body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
         MaybeUninitializedPlaces {
             tcx,
             body,
@@ -265,9 +243,6 @@ impl<'a, 'tcx> MaybeUninitializedPlaces<'a, 'tcx> {
             mark_inactive_variants_as_uninit: false,
             include_inactive_in_otherwise: false,
             skip_unreachable_unwind: DenseBitSet::new_empty(body.basic_blocks.len()),
-            task_info,
-            definitely_synced_tasks,
-            state_at_last_locations: FxHashMap::default(),
         }
     }
 
@@ -336,20 +311,11 @@ impl<'tcx> HasMoveData<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
 pub struct EverInitializedPlaces<'a, 'tcx> {
     body: &'a Body<'tcx>,
     move_data: &'a MoveData<'tcx>,
-    task_info: &'a TaskInfo,
-    maybe_synced_tasks: &'a MaybeSyncedTasks,
-    state_at_last_locations: FxHashMap<Location, MixedBitSet<InitIndex>>,
 }
 
 impl<'a, 'tcx> EverInitializedPlaces<'a, 'tcx> {
-    pub fn new(body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>, task_info: &'a TaskInfo, maybe_synced_tasks: &'a MaybeSyncedTasks) -> Self {
-        EverInitializedPlaces { 
-            body, 
-            move_data, 
-            task_info,
-            maybe_synced_tasks,
-            state_at_last_locations: FxHashMap::default(),
-        }
+    pub fn new(body: &'a Body<'tcx>, move_data: &'a MoveData<'tcx>) -> Self {
+        EverInitializedPlaces { body, move_data }
     }
 }
 
@@ -383,23 +349,6 @@ impl<'tcx> MaybeUninitializedPlaces<'_, 'tcx> {
             DropFlagState::Present => state.kill(path),
         }
     }
-}
-/// Find the last states of each task in `synced_tasks`.
-///
-/// Panics if any task in `synced_tasks` is not present in `task_info` or is the root task,
-/// as well as if any last location of a task in `synced_tasks` is not in `state_at_last_locations`.
-fn synced_task_last_states<'a, State>(
-    synced_tasks: impl Iterator<Item = Task> + 'a,
-    task_info: &'a TaskInfo,
-    state_at_last_locations: &'a FxHashMap<Location, State>,
-) -> impl Iterator<Item = &'a State> + 'a {
-    synced_tasks
-        .map(|task| task_info.expect_last_location(task))
-        // NOTE(jhilton): we originally expect the map to contain the last location,
-        // but in the case of a loop this isn't actually true. We expect instead
-        // that we'll eventually hit this sync again after changing one of its
-        // predecessors (although I'm not completely sure).
-        .filter_map(|last_location| state_at_last_locations.get(&last_location))
 }
 
 impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
@@ -475,26 +424,6 @@ impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {
             Self::update_bits(state, path, s)
         });
-
-        // This lets us track the state before a reattach, which is necessary when we sync.
-        if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
-            self.state_at_last_locations.insert(location, state.clone());
-        } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
-            // Grab the state at all last locations we could be syncing based on the current basic block.
-            let synced_tasks = self.maybe_synced_tasks.synced_tasks_at(&location);
-            synced_task_last_states(
-                synced_tasks.iter().copied(),
-                &self.task_info,
-                &self.state_at_last_locations,
-            )
-            .for_each(|state_at_last_location| {
-                // Bottom is uninitialized and top is initialized, and we want to become more initialized, so we go up.
-                // This makes sense because as we go 'up' in the lattice, we consider more of the state to be initialized.
-                // `join` provides least-upper-bound and we want the state to become "more initialized" upon a sync.
-                state.join(&state_at_last_location);
-            });
-        }
-
         edges
     }
 
@@ -605,22 +534,6 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {
             Self::update_bits(state, path, s)
         });
-        if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
-            self.state_at_last_locations.insert(location, state.clone());
-        } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
-            let synced_tasks = self.definitely_synced_tasks.synced_tasks_at(&location);
-            synced_task_last_states(
-                synced_tasks.iter().copied(),
-                &self.task_info,
-                &self.state_at_last_locations,
-            )
-            .for_each(|last_state| {
-                use crate::lattice::MeetSemiLattice;
-                // Bottom is all-initialized and top is all-uninitialized, so we want to use meet to go lower in the lattice.
-                state.meet(last_state);
-            });
-        }
-
         if self.skip_unreachable_unwind.contains(location.block) {
             let mir::TerminatorKind::Drop { target, unwind, .. } = terminator.kind else { bug!() };
             assert_matches!(unwind, mir::UnwindAction::Cleanup(_));
@@ -756,22 +669,6 @@ impl<'tcx> Analysis<'tcx> for EverInitializedPlaces<'_, 'tcx> {
                 })
                 .copied(),
         );
-        if let mir::TerminatorKind::Reattach { continuation: _ } = terminator.kind {
-            self.state_at_last_locations.insert(location, state.clone());
-        } else if let mir::TerminatorKind::Sync { target: _ } = terminator.kind {
-            let synced_tasks = self.maybe_synced_tasks.synced_tasks_at(&location);
-            // A state is ever initialized if it is ever initialized in some synced child.
-            synced_task_last_states(
-                synced_tasks.iter().copied(),
-                &self.task_info,
-                &self.state_at_last_locations,
-            )
-            .for_each(|last_state| {
-                // This lattice has all-uninitialized as the bottom and the join operator adds
-                // initialized places, so we use join here.
-                state.join(&last_state);
-            });
-        }
         terminator.edges()
     }
 

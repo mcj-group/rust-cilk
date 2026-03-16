@@ -43,7 +43,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_mir_dataflow::debuginfo::debuginfo_locals;
 use rustc_span::DUMMY_SP;
 use smallvec::SmallVec;
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 
 pub(super) enum SimplifyCfg {
     Initial,
@@ -162,12 +162,31 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
 
                 debug!("terminator of {:?} = {:?}", bb, terminator.kind);
 
-                for successor in terminator.successors_mut() {
-                    let old_successor = *successor;
-                    self.collapse_goto_chain(successor, &mut changed);
+                // Collect the current successors before mutating, so we can
+                // call collapse_goto_chain (which also borrows self) in the loop.
+                let old_successors: SmallVec<[BasicBlock; 4]> =
+                    terminator.successors().collect();
+                let mut new_successors: SmallVec<[BasicBlock; 4]> = old_successors.clone();
+                for new_succ in &mut new_successors {
+                    self.collapse_goto_chain(new_succ, &mut changed);
+                }
+                // Write the updated successors back into the terminator.
+                {
+                    let mut idx = 0;
+                    terminator.successors_mut(|successor| {
+                        *successor = new_successors[idx];
+                        idx += 1;
+                    });
+                }
+                // Handle parallel loop header propagation.
+                for (old_successor, new_successor) in
+                    old_successors.iter().zip(new_successors.iter())
+                {
+                    let old_successor = *old_successor;
+                    let new_successor = *new_successor;
                     debug!(
                         "successor before and after collapse: {:?} and {:?}",
-                        old_successor, successor
+                        old_successor, new_successor
                     );
 
                     // If the old successor was a parallel loop header
@@ -185,15 +204,15 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
                     // that all calls to collapse_goto_chain behave similarly on the same
                     // initial successor.
 
-                    let should_make_successor_parallel_loop_header = *successor != old_successor
+                    let should_make_successor_parallel_loop_header = new_successor != old_successor
                         && self.pred_count[old_successor] == 0
                         && self.basic_blocks[old_successor].is_parallel_loop_header;
                     if should_make_successor_parallel_loop_header {
                         debug!(
                             "making {:?} a new parallel loop header from {:?}",
-                            *successor, old_successor
+                            new_successor, old_successor
                         );
-                        self.basic_blocks[*successor].is_parallel_loop_header = true;
+                        self.basic_blocks[new_successor].is_parallel_loop_header = true;
                     }
                 }
 

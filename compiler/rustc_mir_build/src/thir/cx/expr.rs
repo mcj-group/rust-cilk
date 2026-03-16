@@ -1023,7 +1023,7 @@ impl<'tcx> ThirBuildCx<'tcx> {
                     // of the origin of the loop so we can add metadata in MIR, but we don't
                     // have to spawn the body (when lowering to MIR we'll also sync after the
                     // loop).
-                    let tapir_loop_spawn = matches!(source, hir::LoopSource::CilkFor);
+                    let tapir_loop_spawn = matches!(src, hir::LoopSource::CilkFor);
                     ExprKind::Loop { body, tapir_loop_spawn }
                 }
             }

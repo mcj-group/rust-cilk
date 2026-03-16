@@ -1,5 +1,5 @@
 //! Set and unset common attributes on LLVM values.
-use rustc_hir::attrs::{InlineAttr, InstructionSetAttr, OptimizeAttr, RtsanSetting};
+use rustc_hir::attrs::RtsanSetting;
 use rustc_hir::def_id::DefId;
 use rustc_hir::find_attr;
 use rustc_middle::middle::codegen_fn_attrs::{
@@ -11,14 +11,14 @@ use rustc_symbol_mangling::mangle_internal_symbol;
 use rustc_target::spec::{Arch, FramePointer, SanitizerSet, StackProbeType, StackProtector};
 use smallvec::SmallVec;
 
-use crate::context::SimpleCx;
+use crate::context::{CodegenCx, SimpleCx};
 use crate::errors::SanitizerMemtagRequiresMte;
 use crate::llvm::AttributePlace::Function;
 use crate::llvm::{
     self, AllocKindFlags, Attribute, AttributeKind, AttributePlace, MemoryEffects, Value,
 };
 use crate::{Session, attributes, llvm_util};
-pub use rustc_attr::{InlineAttr, OrphaningAttr, InstructionSetAttr, OptimizeAttr};
+pub(crate) use rustc_hir::attrs::{InlineAttr, InstructionSetAttr, OptimizeAttr, OrphaningAttr};
 
 pub(crate) fn apply_to_llfn(llfn: &Value, idx: AttributePlace, attrs: &[&Attribute]) {
     if !attrs.is_empty() {
@@ -101,7 +101,9 @@ fn patchable_function_entry_attrs<'ll>(
         ));
     }
     attrs
+}
 
+#[allow(dead_code)]
 fn orphaning_attr<'ll>(cx: &CodegenCx<'ll, '_>, orphaning: OrphaningAttr) -> Option<&'ll Attribute> {
     match orphaning {
         OrphaningAttr::Hint => Some(AttributeKind::Orphaning.create_attr(cx.llcx)),

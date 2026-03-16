@@ -4,9 +4,8 @@ use rustc_abi::{Align, ExternAbi};
 use rustc_ast::expand::autodiff_attrs::{AutoDiffAttrs, DiffActivity, DiffMode};
 use rustc_ast::{LitKind, MetaItem, MetaItemInner};
 use rustc_hir::attrs::{
-    AttributeKind, EiiImplResolution, InlineAttr, Linkage, RtsanSetting, UsedBy,
+    AttributeKind, EiiImplResolution, InlineAttr, Linkage, OrphaningAttr, RtsanSetting, UsedBy,
 };
-use rustc_attr::{list_contains_name, InlineAttr, OrphaningAttr, InstructionSetAttr, OptimizeAttr};
 use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE, LocalDefId};
 use rustc_hir::{self as hir, Attribute, find_attr};
@@ -306,7 +305,7 @@ fn process_builtin_attrs(
 
 /// Applies overrides for codegen fn attrs. These often have a specific reason why they're necessary.
 /// Please comment why when adding a new one!
-fn apply_overrides(tcx: TyCtxt<'_>, did: LocalDefId, codegen_fn_attrs: &mut CodegenFnAttrs) {
+fn apply_overrides(tcx: TyCtxt<'_>, did: LocalDefId, attrs: &[hir::Attribute], codegen_fn_attrs: &mut CodegenFnAttrs) {
     // Apply the minimum function alignment here. This ensures that a function's alignment is
     // determined by the `-C` flags of the crate it is defined in, not the `-C` flags of the crate
     // it happens to be codegen'd (or const-eval'd) in.
@@ -331,10 +330,12 @@ fn apply_overrides(tcx: TyCtxt<'_>, did: LocalDefId, codegen_fn_attrs: &mut Code
         if !attr.has_name(sym::orphaning) {
             return oa;
         }
-        match attr.meta_kind() {
-            Some(MetaItemKind::Word) => OrphaningAttr::Hint,
-            Some(MetaItemKind::List(_)) | Some(MetaItemKind::NameValue(_)) => todo!(),
-            None => oa,
+        if attr.is_word() {
+            OrphaningAttr::Hint
+        } else if attr.meta_item_list().is_some() || attr.value_str().is_some() {
+            todo!()
+        } else {
+            oa
         }
     });
     // #73631: closures inherit `#[target_feature]` annotations
@@ -573,7 +574,7 @@ fn codegen_fn_attrs(tcx: TyCtxt<'_>, did: LocalDefId) -> CodegenFnAttrs {
 
     let interesting_spans = process_builtin_attrs(tcx, did, attrs, &mut codegen_fn_attrs);
     handle_lang_items(tcx, did, &interesting_spans, attrs, &mut codegen_fn_attrs);
-    apply_overrides(tcx, did, &mut codegen_fn_attrs);
+    apply_overrides(tcx, did, attrs, &mut codegen_fn_attrs);
     check_result(tcx, did, interesting_spans, &codegen_fn_attrs);
 
     codegen_fn_attrs

@@ -42,7 +42,8 @@ enum MergingSucc {
 enum CallKind {
     Normal,
     Tail,
-    
+}
+
 enum AddParallelLoopMetadata {
     False,
     True,
@@ -1407,7 +1408,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
     fn try_sync_region(&self) -> Option<Bx::Value> {
         self.sync_region
     }
-}
 
     pub(crate) fn codegen_block(&mut self, mut bb: mir::BasicBlock) {
         let llbb = match self.try_llbb(bb) {

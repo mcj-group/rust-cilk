@@ -180,6 +180,12 @@ impl CheckInlineAssembly {
                 hir::intravisit::walk_expr(self, expr);
             }
 
+            ExprKind::CilkSpawn(..)
+            | ExprKind::CilkScope(..)
+            | ExprKind::CilkSync => {
+                self.items.push((ItemKind::NonAsm, span));
+            }
+
             ExprKind::Err(_) => {
                 self.items.push((ItemKind::Err, span));
             }

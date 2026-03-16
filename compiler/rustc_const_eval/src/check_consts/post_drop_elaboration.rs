@@ -92,7 +92,10 @@ impl<'tcx> Visitor<'tcx> for CheckLiveDrops<'_, 'tcx> {
             | mir::TerminatorKind::Return
             | mir::TerminatorKind::SwitchInt { .. }
             | mir::TerminatorKind::Unreachable
-            | mir::TerminatorKind::Yield { .. } => {}
+            | mir::TerminatorKind::Yield { .. }
+            | mir::TerminatorKind::Detach { .. }
+            | mir::TerminatorKind::Reattach { .. }
+            | mir::TerminatorKind::Sync { .. } => {}
         }
     }
 }

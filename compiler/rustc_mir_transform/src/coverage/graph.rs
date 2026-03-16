@@ -330,6 +330,9 @@ struct CoverageSuccessors<'a> {
     /// `Yield` terminators are not chainable, because their sole out-edge is
     /// only followed if/when the generator is resumed after the yield.
     is_yield: bool,
+    /// OpenCilk parallel terminators (Detach/Reattach/Sync) are not chainable,
+    /// because they represent parallel control flow boundaries.
+    is_not_chainable: bool,
 }
 
 impl CoverageSuccessors<'_> {
@@ -344,7 +347,7 @@ impl CoverageSuccessors<'_> {
     /// Returns true if the terminator itself is assumed to have the same
     /// execution count as the sum of its out-edges (assuming no panics).
     fn is_out_summable(&self) -> bool {
-        !self.is_yield && !self.targets.is_empty()
+        !self.is_yield && !self.is_not_chainable && !self.targets.is_empty()
     }
 }
 
@@ -364,6 +367,7 @@ impl IntoIterator for CoverageSuccessors<'_> {
 fn bcb_filtered_successors<'a, 'tcx>(terminator: &'a Terminator<'tcx>) -> CoverageSuccessors<'a> {
     use TerminatorKind::*;
     let mut is_yield = false;
+    let mut is_not_chainable = false;
     let targets = match &terminator.kind {
         // A switch terminator can have many coverage-relevant successors.
         SwitchInt { targets, .. } => targets.all_targets(),
@@ -391,16 +395,17 @@ fn bcb_filtered_successors<'a, 'tcx>(terminator: &'a Terminator<'tcx>) -> Covera
         // diverges or uses asm goto.
         InlineAsm { targets, .. } => &targets,
 
-        Detach { spawned_task, continuation } => {
-            // We would ideally return an array instead of allocating a Vec here, but that's not
-            // Cow's default behavior.
-            CoverageSuccessors::NotChainable(Cow::Owned(vec![spawned_task, continuation]))
+        // OpenCilk parallel terminators are not chainable (parallel control flow).
+        // Reattach and Sync have a single successor; Detach has two targets stored
+        // separately, so we return only the continuation as the coverage-relevant
+        // successor (the spawned task's coverage is tracked via its own BCB).
+        Reattach { continuation } | Sync { target: continuation } => {
+            is_not_chainable = true;
+            slice::from_ref(continuation)
         }
-        Reattach { ref continuation } => {
-            CoverageSuccessors::NotChainable(Cow::Borrowed(std::slice::from_ref(continuation)))
-        }
-        Sync { ref target } => {
-            CoverageSuccessors::NotChainable(Cow::Borrowed(std::slice::from_ref(target)))
+        Detach { continuation, .. } => {
+            is_not_chainable = true;
+            slice::from_ref(continuation)
         }
 
         // These terminators have no coverage-relevant successors.
@@ -412,7 +417,7 @@ fn bcb_filtered_successors<'a, 'tcx>(terminator: &'a Terminator<'tcx>) -> Covera
         | UnwindTerminate(_) => &[],
     };
 
-    CoverageSuccessors { targets, is_yield }
+    CoverageSuccessors { targets, is_yield, is_not_chainable }
 }
 
 /// Wrapper around a [`mir::BasicBlocks`] graph that restricts each node's
