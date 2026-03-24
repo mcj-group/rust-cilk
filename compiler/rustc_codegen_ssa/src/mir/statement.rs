@@ -1,6 +1,6 @@
-use rustc_middle::mir;
-use rustc_middle::mir::NonDivergingIntrinsic;
-use rustc_session::config::OptLevel;
+use rustc_middle::mir::{self, NonDivergingIntrinsic, StmtDebugInfo};
+use rustc_middle::span_bug;
+use tracing::instrument;
 
 use super::{FunctionCx, LocalRef};
 use crate::traits::*;

@@ -727,7 +727,10 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             | TerminatorKind::Drop { .. }
             | TerminatorKind::FalseEdge { .. }
             | TerminatorKind::FalseUnwind { .. }
-            | TerminatorKind::InlineAsm { .. } => {
+            | TerminatorKind::InlineAsm { .. }
+            | TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => {
                 // no checks needed for these
             }
 

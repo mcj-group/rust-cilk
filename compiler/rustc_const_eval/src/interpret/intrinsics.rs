@@ -835,7 +835,7 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             }
             // These are no-ops without a runtime to operate with, and even so they're just hints.
             NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop | NonDivergingIntrinsic::TaskframeCreate | NonDivergingIntrinsic::TaskframeUse => {
-                Ok(())
+                interp_ok(())
             }
         }
     }
