@@ -484,6 +484,8 @@ pub enum NonDivergingIntrinsic {
     CopyNonOverlapping(CopyNonOverlapping),
     TapirRuntimeStart,
     TapirRuntimeStop,
+    TaskframeCreate,
+    TaskframeUse
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

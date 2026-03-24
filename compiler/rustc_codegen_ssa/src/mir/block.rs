@@ -1,13 +1,6 @@
-use super::operand::OperandRef;
-use super::operand::OperandValue::{Immediate, Pair, Ref, ZeroSized};
-use super::place::PlaceRef;
-use super::{CachedLlbb, FunctionCx, LocalRef};
+use std::cmp;
 
-use crate::base;
-use crate::common::{self, IntPredicate};
-use crate::meth;
-use crate::traits::*;
-use crate::MemFlags;
+use rustc_abi::{Align, BackendRepr, ExternAbi, HasDataLayout, Reg, Size, WrappingRange};
 use rustc_ast as ast;
 use rustc_ast::{InlineAsmOptions, InlineAsmTemplatePiece};
 use rustc_data_structures::packed::Pu128;
@@ -19,11 +12,20 @@ use rustc_middle::ty::print::{with_no_trimmed_paths, with_no_visible_paths};
 use rustc_middle::ty::{self, Instance, Ty, TypeVisitableExt};
 use rustc_middle::{bug, span_bug};
 use rustc_session::config::OptLevel;
-use rustc_span::{source_map::Spanned, sym, Span, Symbol};
-use rustc_target::abi::call::{ArgAbi, FnAbi, PassMode, Reg};
-use rustc_target::abi::{self, HasDataLayout, WrappingRange};
-use rustc_target::spec::abi::Abi;
-use std::cmp;
+use rustc_span::Span;
+use rustc_span::source_map::Spanned;
+use rustc_target::callconv::{ArgAbi, ArgAttributes, CastTarget, FnAbi, PassMode};
+use tracing::{debug, info};
+
+use super::operand::OperandRef;
+use super::operand::OperandValue::{Immediate, Pair, Ref, ZeroSized};
+use super::place::{PlaceRef, PlaceValue};
+use super::{CachedLlbb, FunctionCx, LocalRef};
+use crate::base::{self, is_call_from_compiler_builtins_to_upstream_monomorphization};
+use crate::common::{self, IntPredicate};
+use crate::errors::CompilerBuiltinsCannotCall;
+use crate::traits::*;
+use crate::{MemFlags, meth};
 
 // Indicates if we are in the middle of merging a BB's successor into it. This
 // can happen when BB jumps directly to its successor and the successor has no
@@ -148,7 +150,6 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         )
     }
 
-    // could be useful for CAIATHEN(TASK3)
     fn funclet_br_maybe_add_metadata<Bx: BuilderMethods<'a, 'tcx>>(
         &self,
         fx: &mut FunctionCx<'a, 'tcx, Bx>,
@@ -1408,15 +1409,13 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         self.sync_region_stack.last()
     }
 
-impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
-    pub fn codegen_block(&mut self, mut bb: mir::BasicBlock) {
+    pub(crate) fn codegen_block(&mut self, mut bb: mir::BasicBlock) {
         let llbb = match self.try_llbb(bb) {
             Some(llbb) => llbb,
             None => return,
         };
         let bx = &mut Bx::build(self.cx, llbb);
         let mir = self.mir;
-
 
         // MIR basic blocks stop at any function call. This may not be the case
         // for the backend's basic blocks, in which case we might be able to

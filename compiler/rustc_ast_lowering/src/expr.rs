@@ -16,6 +16,7 @@ use rustc_session::errors::report_lit_error;
 use rustc_span::source_map::{Spanned, respan};
 use rustc_span::{ByteSymbol, DUMMY_SP, DesugaringKind, Ident, Span, Symbol, sym};
 use thin_vec::{ThinVec, thin_vec};
+use rustc_ast::mut_visit::MutVisitor;
 use visit::{Visitor, walk_expr};
 
 use super::errors::{
@@ -1941,12 +1942,11 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let closure_node_id = self.next_node_id();
 
                 let closure_hir_id = self.next_id();
-                let parent_id = self.current_hir_id_owner;
                 let closure_def_id = self.create_def(
-                    parent_id.def_id,
                     closure_node_id,
-                    kw::Empty,
+                    None,
                     DefKind::Closure,
+                    DefPathData::Closure, // FIXME(CAIATHEN) I have no idea what this does
                     body_block.span,
                 );
                 // Register the closure DefId
