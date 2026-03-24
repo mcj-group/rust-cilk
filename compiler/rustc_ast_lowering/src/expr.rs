@@ -2,21 +2,11 @@ use std::mem;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
-use super::errors::{
-    AsyncCoroutinesNotSupported, AwaitOnlyInAsyncFnAndBlocks, BaseExpressionDoubleDot,
-    ClosureCannotBeStatic, CoroutineTooManyParameters,
-    FunctionalRecordUpdateDestructuringAssignment, InclusiveRangeWithNoEnd, MatchArmWithNoBody,
-    NeverPatternWithBody, NeverPatternWithGuard, UnderscoreExprLhsAssign,
-};
-use super::ResolverAstLoweringExt;
-use super::{ImplTraitContext, LoweringContext, ParamMode, ParenthesizedGenericArgs};
-use crate::{FnDeclKind, ImplTraitPosition};
-use rustc_ast::mut_visit::{ReplaceVariable, MutVisitor};
-use rustc_ast::ptr::P as AstP;
 use rustc_ast::*;
 use rustc_ast_pretty::pprust::expr_to_string;
 use rustc_data_structures::stack::ensure_sufficient_stack;
-use rustc_hir::{self as hir};
+use rustc_errors::msg;
+use rustc_hir as hir;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::definitions::DefPathData;
 use rustc_hir::{HirId, Target, find_attr};
@@ -39,6 +29,7 @@ use super::{
 };
 use crate::errors::{InvalidLegacyConstGenericArg, UseConstGenericArg, YieldInClosure};
 use crate::{AllowReturnTypeNotation, FnDeclKind, ImplTraitPosition, TryBlockScope};
+use crate::mut_visit::ReplaceVariable;
 
 struct WillCreateDefIdsVisitor {}
 
@@ -1812,7 +1803,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         e: &Expr,
         pat: &Pat,
         head: &Expr,
-        body: &AstP<Block>,
+        body: &Box<Block>,
         opt_label: Option<Label>,
         loop_kind: ForLoopKind,
     ) -> hir::Expr<'hir> {
@@ -1850,7 +1841,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
                 let induction_var_ident = match &ast_pat.kind{
                     PatKind::Ident (_bind, ident, _other) => *ident,
-                    _ => Ident::empty() // TODO will this ever happen?
+                    _ => unreachable!() // FIXME(CAIATHEN) will this ever happen?
                 };
 
                 // create NodeId and Ident for shadowing variable
@@ -1898,7 +1889,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     &ast::Pat{ // I did not need to do this in AST
                         id: shadow_pat_id,
                         kind: PatKind::Ident(
-                            ast::BindingAnnotation(ByRef::No, Mutability::Not), // TODO: this might need to be more general
+                            ast::BindingMode(ByRef::No, Mutability::Not), // TODO: this might need to be more general
                             shadow_ident,
                             None // TODO: this takes Pat and maybe I could put the induction var pat here? But IDK what it does
                         ),
@@ -1922,7 +1913,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir::LocalSource::Normal, // idk if this is correct
                 );
 
-                let mut body_clone: AstP<Block> = body.clone();
+                let mut body_clone: Box<Block> = body.clone();
                 let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
                 let mut visitor = ReplaceVariable{
@@ -1992,10 +1983,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let closure_expr_val = hir::Expr { hir_id: closure_hir_id, kind: hir::ExprKind::Closure(closure_hir), span: self.lower_span(body_block.span) };
 
                 // Create the inline and orphaning attributes
-                let inline_attr = attr::mk_attr_nested_word(&self.tcx.sess.parse_sess.attr_id_generator, AttrStyle::Outer, sym::inline, sym::always, head_span); // TODO: are these the correct spans?
-                let orphaning_attr = attr::mk_attr_word(&self.tcx.sess.parse_sess.attr_id_generator, AttrStyle::Outer, sym::orphaning, head_span); // TODO: are these the correct spans?
+                let inline_attr = attr::mk_attr_nested_word(&self.tcx.sess.psess.attr_id_generator, AttrStyle::Outer, Safety::Default, sym::inline, sym::always, head_span); // TODO: are these the correct spans?
+                let orphaning_attr = attr::mk_attr_word(&self.tcx.sess.psess.attr_id_generator, AttrStyle::Outer, Safety::Default, sym::orphaning, head_span); // TODO: are these the correct spans?
                 let attrs: AttrVec = thin_vec![inline_attr, orphaning_attr];
-                self.lower_attrs(closure_hir_id, &attrs);
+                self.lower_attrs(closure_hir_id, &attrs, self.lower_span(body_block.span), Target::from_expr(closure_expr_val));
 
                 let closure_expr = self.arena.alloc(closure_expr_val); 
 
@@ -2013,7 +2004,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 // Create body expression of the Some arm
                 self.arena.alloc(outer_block_expr_val)
             } else {
-                let body_block = self.with_loop_scope(e.id, |this| this.lower_block(body, false));
+                let body_block =
+                self.with_loop_scope(loop_hir_id, |this| this.lower_block(body, false));
                 self.arena.alloc(self.expr_block(body_block))
             };
             self.arm(some_pat, body_expr, for_span)
