@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use build_helper::ci::CiEnv;
 use build_helper::git::PathFreshness;
+use flate2::bufread::GzDecoder;
 use xz2::bufread::XzDecoder;
 
 use crate::core::config::{BUILDER_CONFIG_FILENAME, TargetSelection};
@@ -418,7 +419,8 @@ impl Config {
             self.download_file(url, &tarball, "");
         }
         // Now the component is at tarball, we have to unpack it into the destination.
-        self.unpack(&tarball, &destination, prefix);
+        // The opencilk tarballs are .tar.gz (from GitHub), not .tar.xz, so we use GzDecoder.
+        unpack_gz(&self.exec_ctx, &tarball, &destination, prefix);
     }
 
     pub fn download_ci_gcc(&self, gcc_sha: &str, root_dir: &Path) {
@@ -1009,6 +1011,53 @@ fn unpack(exec_ctx: &ExecutionContext, tarball: &Path, dst: &Path, pattern: &str
             t!(writeln!(record, "{}", short_path.to_str().unwrap()));
         }
         let src_path = dst.join(original_path);
+        if src_path.is_dir() && dst_path.exists() {
+            continue;
+        }
+        t!(move_file(src_path, dst_path));
+    }
+    let dst_dir = dst.join(directory_prefix);
+    if dst_dir.exists() {
+        t!(fs::remove_dir_all(&dst_dir), format!("failed to remove {}", dst_dir.display()));
+    }
+}
+
+/// Like `unpack`, but for `.tar.gz` archives (e.g. opencilk components downloaded from GitHub).
+/// The `prefix` is the top-level directory name inside the tarball (e.g.
+/// `"cheetah-1-dev-darwin-bitcode-multiple-arch"`).  All entries under that prefix are extracted
+/// into `dst`, stripping the prefix.
+fn unpack_gz(exec_ctx: &ExecutionContext, tarball: &Path, dst: &Path, prefix: &str) {
+    eprintln!("extracting {} to {}", tarball.display(), dst.display());
+    if !dst.exists() {
+        t!(fs::create_dir_all(dst));
+    }
+
+    let data = t!(File::open(tarball), format!("file {} not found", tarball.display()));
+    let decompressor = GzDecoder::new(BufReader::new(data));
+    let mut tar = tar::Archive::new(decompressor);
+
+    let directory_prefix = Path::new(prefix);
+
+    for member in t!(tar.entries()) {
+        let mut member = t!(member);
+        let original_path = t!(member.path()).into_owned();
+        if original_path == directory_prefix {
+            continue;
+        }
+        let short_path = match original_path.strip_prefix(directory_prefix) {
+            Ok(p) => p.to_owned(),
+            Err(_) => continue,
+        };
+        let dst_path = dst.join(&short_path);
+
+        exec_ctx.do_if_verbose(|| {
+            println!("extracting {} to {}", original_path.display(), dst.display());
+        });
+
+        if !t!(member.unpack_in(dst)) {
+            panic!("path traversal attack ??");
+        }
+        let src_path = dst.join(&original_path);
         if src_path.is_dir() && dst_path.exists() {
             continue;
         }
