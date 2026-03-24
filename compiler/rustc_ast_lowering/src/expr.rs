@@ -1929,7 +1929,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     self.resolver.partial_res_map.insert(*node_id, shadow_res);
                 }
 
-                let body_block = self.with_loop_scope(e.id, |this| this.lower_block(&*body_clone, false));
+                let body_block = self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
                 // let body_block = self.lower_block(&*body_clone, false);
                 // Wrap the body in a cilk_spawn
                 let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(body_block);
@@ -1986,7 +1986,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let inline_attr = attr::mk_attr_nested_word(&self.tcx.sess.psess.attr_id_generator, AttrStyle::Outer, Safety::Default, sym::inline, sym::always, head_span); // TODO: are these the correct spans?
                 let orphaning_attr = attr::mk_attr_word(&self.tcx.sess.psess.attr_id_generator, AttrStyle::Outer, Safety::Default, sym::orphaning, head_span); // TODO: are these the correct spans?
                 let attrs: AttrVec = thin_vec![inline_attr, orphaning_attr];
-                self.lower_attrs(closure_hir_id, &attrs, self.lower_span(body_block.span), Target::from_expr(closure_expr_val));
+                self.lower_attrs(closure_hir_id, &attrs, self.lower_span(body_block.span), Target::Expression);
 
                 let closure_expr = self.arena.alloc(closure_expr_val); 
 
