@@ -230,7 +230,10 @@ struct Builder<'a, 'tcx> {
     // the root (most of them do) and saves us from retracing many sub-paths
     // many times, and rechecking many nodes.
     lint_level_roots_cache: GrowableBitSet<hir::ItemLocalId>,
-    orphaning: bool,
+
+    /// Collects additional coverage information during MIR building.
+    /// Only present if coverage is enabled and this function is eligible.
+    coverage_info: Option<coverageinfo::CoverageInfoBuilder>,
 }
 
 type CaptureMap<'tcx> = SortedIndexMultiMap<usize, ItemLocalId, Capture<'tcx>>;
@@ -459,16 +462,6 @@ fn construct_fn<'tcx>(
     let span = tcx.def_span(fn_def);
     let fn_id = tcx.local_def_id_to_hir_id(fn_def);
 
-    // Access attributes
-    let attrs = tcx.hir().attrs(fn_id);    
-    let orphaning = attrs.iter().any(|a| a.has_name(sym::orphaning));
-    
-    // let parent_def_id = tcx.parent(fn_def);
-
-    // The representation of thir for `-Zunpretty=thir-tree` relies on
-    // the entry expression being the last element of `thir.exprs`.
-    assert_eq!(expr.as_usize(), thir.exprs.len() - 1);
-
     // Figure out what primary body this item has.
     let body = tcx.hir_body_owned_by(fn_def);
     let span_with_body = tcx.hir_span_with_body(fn_id);
@@ -529,7 +522,6 @@ fn construct_fn<'tcx>(
         return_ty,
         return_ty_span,
         coroutine,
-        orphaning,
     );
 
     let call_site_scope =
@@ -599,20 +591,11 @@ fn construct_const<'a, 'tcx>(
         _ => span_bug!(tcx.def_span(def), "can't build MIR for {:?}", def),
     };
 
-    let infcx = tcx.infer_ctxt().build();
-    let mut builder = Builder::new(
-        thir,
-        infcx,
-        def,
-        hir_id,
-        span,
-        0,
-        Safety::Safe,
-        const_ty,
-        const_ty_span,
-        None,
-        false,
-    );
+    // FIXME(#132279): We likely want to be able to use the hidden types of
+    // opaques used by this function here.
+    let infcx = tcx.infer_ctxt().build(TypingMode::non_body_analysis());
+    let mut builder =
+        Builder::new(thir, infcx, def, hir_id, span, 0, const_ty, const_ty_span, None);
 
     let mut block = START_BLOCK;
     block = builder.expr_into_dest(Place::return_place(), block, expr).into_block();
@@ -752,7 +735,6 @@ fn construct_error(tcx: TyCtxt<'_>, def_id: LocalDefId, guar: ErrorGuaranteed) -
         span,
         coroutine,
         Some(guar),
-        false,
     )
 }
 
@@ -767,7 +749,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         return_ty: Ty<'tcx>,
         return_span: Span,
         coroutine: Option<Box<CoroutineInfo<'tcx>>>,
-        orphaning: bool,
     ) -> Builder<'a, 'tcx> {
         let tcx = infcx.tcx;
         let attrs = tcx.hir_attrs(hir_id);
@@ -813,7 +794,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             unit_temp: None,
             var_debug_info: vec![],
             lint_level_roots_cache: GrowableBitSet::new_empty(),
-            orphaning,
+            coverage_info: coverageinfo::CoverageInfoBuilder::new_if_enabled(tcx, def),
         };
 
         assert_eq!(builder.cfg.start_new_block(), START_BLOCK);
@@ -968,8 +949,18 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             self.fn_span,
             self.coroutine,
             None,
-            self.orphaning,
-        )
+        );
+        body.coverage_info_hi = self.coverage_info.map(|b| b.into_done());
+
+        let writer = pretty::MirWriter::new(self.tcx);
+        for (index, block) in body.basic_blocks.iter().enumerate() {
+            if block.terminator.is_none() {
+                writer.write_mir_fn(&body, &mut std::io::stdout()).unwrap();
+                span_bug!(self.fn_span, "no terminator on block {:?}", index);
+            }
+        }
+
+        body
     }
 
     fn insert_upvar_arg(&mut self) {

@@ -695,18 +695,8 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
                     );
                 }
             }
-            StatementKind::Intrinsic(box kind) => match kind {
-                NonDivergingIntrinsic::Assume(op) => self.check_operand(op, location),
-                NonDivergingIntrinsic::CopyNonOverlapping(..) => span_bug!(
-                    stmt.source_info.span,
-                    "Unexpected NonDivergingIntrinsic::CopyNonOverlapping, should only appear after lowering_intrinsics",
-                ),
-                NonDivergingIntrinsic::TapirRuntimeStart
-                | NonDivergingIntrinsic::TapirRuntimeStop 
-                | NonDivergingIntrinsic::TaskframeCreate 
-                | NonDivergingIntrinsic::TaskframeUse => {}
-            },
-            StatementKind::FakeRead(..)
+            StatementKind::Intrinsic(box NonDivergingIntrinsic::Assume(..))
+            | StatementKind::FakeRead(..)
             | StatementKind::StorageLive(..)
             | StatementKind::StorageDead(..)
             | StatementKind::Retag { .. }
@@ -737,10 +727,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             | TerminatorKind::Drop { .. }
             | TerminatorKind::FalseEdge { .. }
             | TerminatorKind::FalseUnwind { .. }
-            | TerminatorKind::InlineAsm { .. }
-            | TerminatorKind::Detach { .. }
-            | TerminatorKind::Reattach { continuation: _ }
-            | TerminatorKind::Sync { .. } => {
+            | TerminatorKind::InlineAsm { .. } => {
                 // no checks needed for these
             }
 
