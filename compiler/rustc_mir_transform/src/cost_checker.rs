@@ -88,7 +88,9 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
                     NonDivergingIntrinsic::Assume(..) => INSTR_COST,
                     NonDivergingIntrinsic::CopyNonOverlapping(..) => CALL_PENALTY,
                     NonDivergingIntrinsic::TapirRuntimeStart
-                    | NonDivergingIntrinsic::TapirRuntimeStop => INSTR_COST,
+                    | NonDivergingIntrinsic::TapirRuntimeStop
+                    | NonDivergingIntrinsic::TaskframeCreate
+                    | NonDivergingIntrinsic::TaskframeUse => INSTR_COST,
                 };
             }
             StatementKind::Assign(..) => self.penalty += INSTR_COST,

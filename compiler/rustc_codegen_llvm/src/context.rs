@@ -992,28 +992,7 @@ impl<'ll> CodegenCx<'ll, '_> {
             .unwrap_or_else(|| bug!("Unknown intrinsic: `{base_name}`"));
         let f = intrinsic.get_declaration(self.llmod, &type_params);
 
-        if self.sess().instrument_coverage() {
-            ifn!("llvm.instrprof.increment", fn(ptr, t_i64, t_i32, t_i32) -> void);
-        }
-
-        ifn!("llvm.type.test", fn(ptr, t_metadata) -> i1);
-        ifn!("llvm.type.checked.load", fn(ptr, t_i32, t_metadata) -> mk_struct! {ptr, i1});
-
-        if self.sess().opts.debuginfo != DebugInfo::None {
-            ifn!("llvm.dbg.declare", fn(t_metadata, t_metadata) -> void);
-            ifn!("llvm.dbg.value", fn(t_metadata, t_i64, t_metadata) -> void);
-        }
-
-        ifn!("llvm.ptrmask", fn(ptr, t_isize) -> ptr);
-
-        ifn!("llvm.syncregion.start", fn() -> t_token);
-        ifn!("llvm.orphaning.syncregion", fn(t_token) -> void);
-        ifn!("llvm.tapir.runtime.start", fn() -> t_token);
-        ifn!("llvm.tapir.runtime.end", fn(t_token) -> void);
-        ifn!("llvm.taskframe.create", fn() -> t_token);
-        ifn!("llvm.taskframe.use", fn(t_token) -> void);
-
-        None
+        (self.get_type_of_global(f), f)
     }
 
     pub(crate) fn eh_catch_typeinfo(&self) -> &'ll Value {

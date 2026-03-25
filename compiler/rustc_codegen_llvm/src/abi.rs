@@ -406,8 +406,7 @@ impl<'ll, 'tcx> FnAbiLlvmExt<'ll, 'tcx> for FnAbi<'tcx, Ty<'tcx>> {
         to_llvm_calling_convention(cx.tcx.sess, self.conv)
     }
 
-    // CAIATHEN(TASK3)
-    fn apply_attrs_llfn(&self, cx: &CodegenCx<'ll, 'tcx>, llfn: &'ll Value) {
+    fn apply_attrs_llfn(&self, cx: &CodegenCx<'ll, 'tcx>, llfn: &'ll Value, instance: Option<ty::Instance<'tcx>>) {
         let mut func_attrs = SmallVec::<[_; 3]>::new();
         if self.ret.layout.is_uninhabited() {
             func_attrs.push(llvm::AttributeKind::NoReturn.create_attr(cx.llcx));

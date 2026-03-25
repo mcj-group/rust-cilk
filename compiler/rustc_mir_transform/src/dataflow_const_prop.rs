@@ -202,7 +202,10 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             }) => {
                 // This statement represents `*dst = *src`, `count` times.
             }
-            NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop => {}
+            NonDivergingIntrinsic::TapirRuntimeStart
+            | NonDivergingIntrinsic::TapirRuntimeStop
+            | NonDivergingIntrinsic::TaskframeCreate
+            | NonDivergingIntrinsic::TaskframeUse => {}
         }
     }
 
