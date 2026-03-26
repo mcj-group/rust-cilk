@@ -58,17 +58,15 @@ impl<'v> rustc_ast::visit::Visitor<'v> for WillCreateDefIdsVisitor {
 struct ReplaceVariable<'hir> {
     target_ident: Ident,
     new_ident: Ident,
-    new_id: NodeId,
     map_targets: &'hir mut Vec<NodeId>,
 }
 
 impl ReplaceVariable<'_> {
     fn visit_path_replace(&mut self, Path { segments, span, tokens: _ }: &mut Path, e: &mut NodeId) {
         self.visit_span(span);
-        for PathSegment { ident, id, args: _ } in segments {
+        for PathSegment { ident, args: _, .. } in segments {
             if ident.name == self.target_ident.name {
                 *ident = self.new_ident;
-                *id = self.new_id;
                 self.map_targets.push(*e);
             }
         }
@@ -2016,7 +2014,6 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let mut var_visitor = ReplaceVariable{
                     target_ident: induction_var_ident,
                     new_ident: shadow_ident,
-                    new_id: shadow_path_seg_id,
                     map_targets: &mut map_targets
                 };
                 // visit body block
