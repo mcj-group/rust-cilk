@@ -761,6 +761,10 @@ impl<'a> State<'a> {
             ast::ExprKind::CilkSync => {
                 self.word("cilk_sync");
             }
+            ast::ExprKind::Reattach => {
+                self.word("reattach");
+                // TODO: maybe say continue?
+            }
             ast::ExprKind::Become(result) => {
                 self.word("become");
                 self.word(" ");

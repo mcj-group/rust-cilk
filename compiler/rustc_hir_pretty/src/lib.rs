@@ -1766,6 +1766,10 @@ impl<'a> State<'a> {
             hir::ExprKind::CilkSync => {
                 self.word("cilk_sync");
             }
+            hir::ExprKind::Reattach => {
+                self.word("reattach");
+                // TODO: maybe say continue
+            }
             hir::ExprKind::Err(_) => {
                 self.popen();
                 self.word("/*ERROR*/");

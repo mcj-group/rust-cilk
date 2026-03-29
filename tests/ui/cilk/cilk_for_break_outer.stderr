@@ -1,0 +1,8 @@
+error: cannot use `break` within cilk_for
+  --> $DIR/cilk_for_break_outer.rs:13:17
+   |
+LL |                 break 'outer;
+   |                 ^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+

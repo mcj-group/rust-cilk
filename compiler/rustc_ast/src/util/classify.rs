@@ -158,6 +158,7 @@ pub fn leading_labeled_expr(mut expr: &ast::Expr) -> bool {
             | Yield(..)
             | UnsafeBinderCast(..)
             | Err(..)
+            | Reattach
             | Dummy => return false,
         }
     }
@@ -245,6 +246,7 @@ pub fn expr_trailing_brace(mut expr: &ast::Expr) -> Option<TrailingBrace<'_>> {
             | UnsafeBinderCast(..)
             | Err(_)
             | CilkSync
+            | Reattach
             | Dummy => {
                 break None;
             }

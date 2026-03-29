@@ -116,6 +116,9 @@ pub(crate) struct Scopes<'tcx> {
     /// The scope of the innermost if-then currently being lowered.
     if_then_scope: Option<IfThenScope>,
 
+    // TODO: make private?
+    pub reattach_targets: Vec<BasicBlock>,
+
     /// Drops that need to be done on unwind paths. See the comment on
     /// [DropTree] for more details.
     unwind_drops: DropTree,
@@ -485,6 +488,7 @@ impl<'tcx> Scopes<'tcx> {
             breakable_scopes: Vec::new(),
             const_continuable_scopes: Vec::new(),
             if_then_scope: None,
+            reattach_targets: Vec::new(),
             unwind_drops: DropTree::new(),
             coroutine_drops: DropTree::new(),
         }

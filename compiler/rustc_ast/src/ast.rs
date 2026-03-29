@@ -1633,6 +1633,7 @@ impl Expr {
             | ExprKind::While(..)
             | ExprKind::Yield(YieldKind::Postfix(..))
             | ExprKind::Err(_)
+            | ExprKind::Reattach
             | ExprKind::Dummy => prefix_attrs_precedence(&self.attrs),
         }
     }
@@ -1926,6 +1927,9 @@ pub enum ExprKind {
 
     /// A cilk_sync expression. Always evaluates to ().
     CilkSync,
+
+    /// A reattach statement. Never explicitly added by the programmer, used to prematurely end a task body.
+    Reattach,
 
     /// Placeholder for an expression that wasn't syntactically well formed in some way.
     Err(ErrorGuaranteed),

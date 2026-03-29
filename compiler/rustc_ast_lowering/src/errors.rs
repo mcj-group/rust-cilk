@@ -527,3 +527,19 @@ pub(crate) struct CycleInDelegationSignatureResolution {
     #[primary_span]
     pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[diag("cannot use `{$keyword}` within cilk_for")]
+pub(crate) struct BadControlFlowInCilkFor {
+    #[primary_span]
+    pub span: Span,
+    pub keyword: String,
+}
+
+// #[derive(Diagnostic)]
+// #[diag("cannot use `{$keyword}` within cilk_spawn")]
+// pub(crate) struct BadControlFlowInCilkSpawn {
+//     #[primary_span]
+//     pub span: Span,
+//     pub keyword: String,
+// }

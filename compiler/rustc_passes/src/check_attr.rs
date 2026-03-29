@@ -407,7 +407,9 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                             | sym::rustc_inherit_overflow_checks
                             // crate-level attrs, are checked below
                             | sym::feature
-                            | sym::register_tool,
+                            | sym::register_tool
+                            // features used by cilk
+                            | sym::orphaning,
                             ..
                         ] => {}
                         [name, rest@..] => {

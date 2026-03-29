@@ -953,6 +953,7 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr<'v>) 
             visitor.visit_block(block);
         }
         ExprKind::Err(_) => {}
+        ExprKind::Reattach => {}
     }
     V::Result::output()
 }

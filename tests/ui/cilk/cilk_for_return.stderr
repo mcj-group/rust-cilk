@@ -1,0 +1,8 @@
+error: cannot use `return` within cilk_for
+  --> $DIR/cilk_for_return.rs:13:13
+   |
+LL |             return;
+   |             ^^^^^^
+
+error: aborting due to 1 previous error
+

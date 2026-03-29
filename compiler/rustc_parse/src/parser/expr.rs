@@ -1715,6 +1715,8 @@ impl<'a> Parser<'a> {
             self.parse_expr_while(label, lo)
         } else if self.eat_keyword(exp!(For)) {
             self.parse_expr_for(label, lo)
+        } else if self.eat_keyword(exp!(CilkFor)) {
+            self.parse_expr_cilk_for(label, lo)
         } else if self.eat_keyword(exp!(Loop)) {
             self.parse_expr_loop(label, lo)
         } else if self.check_noexpect(&token::OpenBrace) || self.token.is_metavar_block() {
@@ -4467,6 +4469,7 @@ impl MutVisitor for CondChecker<'_> {
             | ExprKind::FormatArgs(_)
             // CilkSync can't contain any expressions.
             | ExprKind::CilkSync
+            | ExprKind::Reattach
             | ExprKind::Err(_)
             | ExprKind::Dummy => {
                 // These would forbid any let expressions they contain already.

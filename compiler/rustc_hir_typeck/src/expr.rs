@@ -421,6 +421,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ExprKind::CilkSpawn(expr) => self.check_expr(expr),
             ExprKind::CilkScope(block) => self.check_expr_block(block, expected),
             ExprKind::CilkSync => tcx.types.unit,
+            ExprKind::Reattach => tcx.types.unit,
         }
     }
 

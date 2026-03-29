@@ -1,3 +1,5 @@
+// run-pass
+
 #![feature(cilk)]
 
 // This is expected to compile and run, currently it does not compile

@@ -1,6 +1,6 @@
-#![feature(cilk)]
+// run-pass
 
-// This is expected to compile and run, currently it does not compile
+#![feature(cilk)]
 
 fn main() {
     cilk_for_in_cilk_spawn();

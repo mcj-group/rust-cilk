@@ -1072,6 +1072,7 @@ macro_rules! common_visitor_and_walkers {
                 ExprKind::Err(_guar) => {}
                 ExprKind::Dummy => {}
                 ExprKind::CilkSync => {}
+                ExprKind::Reattach => {}
             }
 
             visit_span(vis, span)
