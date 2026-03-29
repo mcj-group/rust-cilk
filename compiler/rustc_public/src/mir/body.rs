@@ -485,7 +485,7 @@ pub enum NonDivergingIntrinsic {
     TapirRuntimeStart,
     TapirRuntimeStop,
     TaskframeCreate,
-    TaskframeUse
+    TaskframeUse,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

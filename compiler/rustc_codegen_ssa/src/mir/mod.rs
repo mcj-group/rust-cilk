@@ -352,8 +352,9 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         })
     };
 
-    if Bx::supports_tapir() && uses_cilk_control_flow() { //  && !fx.mir.orphaning
-        
+    if Bx::supports_tapir() && uses_cilk_control_flow() {
+        //  && !fx.mir.orphaning
+
         // Add a sync region at the top of the function, so we can use it later.
         let region_0 = start_bx.sync_region_start();
         fx.sync_region = Some(region_0);
@@ -365,7 +366,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             fx.parallel_back_edges.insert(bb);
         });
     }
-    
+
     // The builders will be created separately for each basic block at `codegen_block`.
     // So drop the builder of `start_llbb` to avoid having two at the same time.
     drop(start_bx);

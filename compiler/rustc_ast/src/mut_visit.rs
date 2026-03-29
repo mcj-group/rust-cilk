@@ -391,7 +391,11 @@ pub struct ReplaceVariable<'hir> {
 }
 
 impl ReplaceVariable<'_> {
-    fn visit_path_replace(&mut self, Path { segments, span, tokens: _ }: &mut Path, e: &mut NodeId) {
+    fn visit_path_replace(
+        &mut self,
+        Path { segments, span, tokens: _ }: &mut Path,
+        e: &mut NodeId,
+    ) {
         self.visit_span(span);
         for PathSegment { ident, id, args: _ } in segments {
             if ident.name == self.target_ident.name {

@@ -6,9 +6,9 @@ use rustc_middle::mir::mono::MonoItem;
 use stable_mir::mir::alloc::GlobalAlloc;
 use stable_mir::mir::{ConstOperand, Statement, UserTypeProjection, VarDebugInfoFragment};
 use stable_mir::ty::{Allocation, Const, ConstantKind};
-use stable_mir::{opaque, Error};
+use stable_mir::{Error, opaque};
 
-use crate::rustc_smir::{alloc, Stable, Tables};
+use crate::rustc_smir::{Stable, Tables, alloc};
 
 impl<'tcx> Stable<'tcx> for mir::Body<'tcx> {
     type T = stable_mir::mir::Body;
@@ -424,7 +424,10 @@ impl<'tcx> Stable<'tcx> for mir::NonDivergingIntrinsic<'tcx> {
                     count: copy_non_overlapping.count.stable(tables),
                 })
             }
-            NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop  | NonDivergingIntrinsic::TaskframeCreate | NonDivergingIntrinsic::TaskframeUse => {
+            NonDivergingIntrinsic::TapirRuntimeStart
+            | NonDivergingIntrinsic::TapirRuntimeStop
+            | NonDivergingIntrinsic::TaskframeCreate
+            | NonDivergingIntrinsic::TaskframeUse => {
                 // NOTE(jhilton): for the same reason that we don't include Detach, Reattach, or Sync,
                 // we don't include these intrinsics.
                 unreachable!()

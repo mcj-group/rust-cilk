@@ -250,8 +250,10 @@ impl ScopeTree {
         debug!("{:?}.parent = {:?}", child, parent);
 
         if let Some(existing) = self.parent_map.get(&child) {
-            eprintln!("ERROR: Scope {:?} already has parent {:?}, trying to set to {:?}", 
-                    child, existing, parent);
+            eprintln!(
+                "ERROR: Scope {:?} already has parent {:?}, trying to set to {:?}",
+                child, existing, parent
+            );
         }
 
         if let Some(p) = parent {

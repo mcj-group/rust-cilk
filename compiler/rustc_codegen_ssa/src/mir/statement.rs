@@ -110,7 +110,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             | mir::StatementKind::PlaceMention(..)
             | mir::StatementKind::BackwardIncompatibleDropHint { .. }
             | mir::StatementKind::Nop => {}
-            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate) | mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse) => todo!()
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate)
+            | mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse) => todo!(),
         }
     }
 

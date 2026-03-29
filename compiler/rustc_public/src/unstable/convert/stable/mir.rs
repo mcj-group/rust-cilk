@@ -519,9 +519,7 @@ impl<'tcx> Stable<'tcx> for mir::NonDivergingIntrinsic<'tcx> {
             NonDivergingIntrinsic::TaskframeCreate => {
                 crate::mir::NonDivergingIntrinsic::TaskframeCreate
             }
-            NonDivergingIntrinsic::TaskframeUse => {
-                crate::mir::NonDivergingIntrinsic::TaskframeUse
-            }
+            NonDivergingIntrinsic::TaskframeUse => crate::mir::NonDivergingIntrinsic::TaskframeUse,
         }
     }
 }

@@ -2,6 +2,7 @@ use std::mem;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
+use rustc_ast::mut_visit::MutVisitor;
 use rustc_ast::*;
 use rustc_ast_pretty::pprust::expr_to_string;
 use rustc_data_structures::stack::ensure_sufficient_stack;
@@ -16,7 +17,6 @@ use rustc_session::errors::report_lit_error;
 use rustc_span::source_map::{Spanned, respan};
 use rustc_span::{ByteSymbol, DUMMY_SP, DesugaringKind, Ident, Span, Symbol, sym};
 use thin_vec::{ThinVec, thin_vec};
-use rustc_ast::mut_visit::MutVisitor;
 use visit::{Visitor, walk_expr};
 
 use super::errors::{
@@ -29,8 +29,8 @@ use super::{
     GenericArgsMode, ImplTraitContext, LoweringContext, ParamMode, ResolverAstLoweringExt,
 };
 use crate::errors::{InvalidLegacyConstGenericArg, UseConstGenericArg, YieldInClosure};
-use crate::{AllowReturnTypeNotation, FnDeclKind, ImplTraitPosition, TryBlockScope};
 use crate::mut_visit::ReplaceVariable;
+use crate::{AllowReturnTypeNotation, FnDeclKind, ImplTraitPosition, TryBlockScope};
 
 struct WillCreateDefIdsVisitor {}
 
@@ -1836,68 +1836,63 @@ impl<'hir> LoweringContext<'_, 'hir> {
         // Some(<pat>) => <body>,
         // For cilk_for we instead perform Some(<pat>) => call < closure < cilk_spawn <body> > >.
         let some_arm = {
-
             let some_pat = self.pat_some(pat_span, pat);
 
             let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
-                let induction_var_ident = match &ast_pat.kind{
-                    PatKind::Ident (_bind, ident, _other) => *ident,
-                    _ => unreachable!() // FIXME(CAIATHEN) will this ever happen?
+                let induction_var_ident = match &ast_pat.kind {
+                    PatKind::Ident(_bind, ident, _other) => *ident,
+                    _ => unreachable!(), // FIXME(CAIATHEN) will this ever happen?
                 };
 
                 // create NodeId and Ident for shadowing variable
                 let shadow_node_id = self.next_node_id();
                 let shadow_ident = rustc_span::symbol::Ident::from_str("shadow");
-                
+
                 // create PathSegment for induction variable (we use PathSegment to reference objects in Paths a.k.a namespaces)
                 let mut pathsegs = ThinVec::new();
                 let new_res = rustc_hir::def::PartialRes::new(hir::def::Res::Local(ast_pat.id));
                 let ast_pathseg_id = self.next_node_id();
                 self.resolver.partial_res_map.insert(ast_pathseg_id, new_res);
                 self.resolver.partial_res_map.insert(shadow_node_id, new_res);
-                
 
-                pathsegs.push(
-                    PathSegment { 
-                        ident: induction_var_ident, 
-                        id: ast_pathseg_id, // TODO: is this correct? I think this should be a new id because it is the id of the pathsegment, not of the pat?
-                        args: None 
-                    }
-                );
+                pathsegs.push(PathSegment {
+                    ident: induction_var_ident,
+                    id: ast_pathseg_id, // TODO: is this correct? I think this should be a new id because it is the id of the pathsegment, not of the pat?
+                    args: None,
+                });
 
                 // create the init attribute for the Local Statement
-                let shadow_init = Some(self.lower_expr(&ast::Expr{
+                let shadow_init = Some(self.lower_expr(&ast::Expr {
                     span: ast_pat.span,
                     attrs: ThinVec::new(),
                     tokens: None,
-                    id: shadow_node_id, 
+                    id: shadow_node_id,
                     kind: ExprKind::Path(
                         None,
                         // Some(QPath::Resolved(Some)), // FIXME this should not be None, but idk how to get this
-                        ast::Path{
+                        ast::Path {
                             span: ast_pat.span,
                             // lower_expr of a ExprKind::Path will go to lower_qpath in compiler/rustc_ast_lowering/src/path.rs and this will give us Resolved and hopefully the res in PathSegments will be correct as well
                             // there's almost resolution here to get res: lower_res in compiler/rustc_ast_lowering/src/lib.rs
                             tokens: None,
-                            segments: pathsegs
-                        }
-                    )
+                            segments: pathsegs,
+                        },
+                    ),
                 }));
 
                 // create Pat for shadowing variable
                 let shadow_pat_id = self.next_node_id();
-                let shadow_pat = self.lower_pat(
-                    &ast::Pat{ // I did not need to do this in AST
-                        id: shadow_pat_id,
-                        kind: PatKind::Ident(
-                            ast::BindingMode(ByRef::No, Mutability::Not), // TODO: this might need to be more general
-                            shadow_ident,
-                            None // TODO: this takes Pat and maybe I could put the induction var pat here? But IDK what it does
-                        ),
-                        span: ast_pat.span,
-                        tokens: None // TODO: should this be empty?
-                    }
-                ); // lower_pat -> lower_pat_mut -> lower_pat_ident
+                let shadow_pat = self.lower_pat(&ast::Pat {
+                    // I did not need to do this in AST
+                    id: shadow_pat_id,
+                    kind: PatKind::Ident(
+                        ast::BindingMode(ByRef::No, Mutability::Not), // TODO: this might need to be more general
+                        shadow_ident,
+                        None, // TODO: this takes Pat and maybe I could put the induction var pat here? But IDK what it does
+                    ),
+                    span: ast_pat.span,
+                    tokens: None, // TODO: should this be empty?
+                }); // lower_pat -> lower_pat_mut -> lower_pat_ident
 
                 let shadow_res = rustc_hir::def::PartialRes::new(Res::Local(shadow_pat_id));
                 let shadow_path_seg_id = self.next_node_id();
@@ -1917,20 +1912,21 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let mut body_clone: Box<Block> = body.clone();
                 let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
-                let mut visitor = ReplaceVariable{
+                let mut visitor = ReplaceVariable {
                     target_ident: induction_var_ident,
                     target_id: ast_pat.id,
                     new_ident: shadow_ident,
                     new_id: shadow_path_seg_id,
-                    map_targets: &mut map_targets
+                    map_targets: &mut map_targets,
                 };
                 // visit body block
                 visitor.visit_block(&mut body_clone);
-                for node_id in &map_targets{
+                for node_id in &map_targets {
                     self.resolver.partial_res_map.insert(*node_id, shadow_res);
                 }
 
-                let body_block = self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
+                let body_block =
+                    self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
                 // let body_block = self.lower_block(&*body_clone, false);
                 // Wrap the body in a cilk_spawn
                 let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(body_block);
@@ -1968,31 +1964,54 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 // Create the closure
                 let closure_hir = self.arena.alloc(hir::Closure {
-                    def_id: closure_def_id,  // Closure gets its own DefId
+                    def_id: closure_def_id, // Closure gets its own DefId
                     binder: hir::ClosureBinder::Default,
                     capture_clause: hir::CaptureBy::Ref,
                     bound_generic_params: &[],
                     fn_decl,
-                    body: body_id,  // But body stays under parent DefId
+                    body: body_id, // But body stays under parent DefId
                     fn_decl_span: self.lower_span(body_block.span),
                     fn_arg_span: Some(self.lower_span(body_block.span)),
                     kind: hir::ClosureKind::Closure,
                     constness: hir::Constness::NotConst,
                 });
 
-                let closure_expr_val = hir::Expr { hir_id: closure_hir_id, kind: hir::ExprKind::Closure(closure_hir), span: self.lower_span(body_block.span) };
+                let closure_expr_val = hir::Expr {
+                    hir_id: closure_hir_id,
+                    kind: hir::ExprKind::Closure(closure_hir),
+                    span: self.lower_span(body_block.span),
+                };
 
                 // Create the inline and orphaning attributes
-                let inline_attr = attr::mk_attr_nested_word(&self.tcx.sess.psess.attr_id_generator, AttrStyle::Outer, Safety::Default, sym::inline, sym::always, head_span); // TODO: are these the correct spans?
-                let orphaning_attr = attr::mk_attr_word(&self.tcx.sess.psess.attr_id_generator, AttrStyle::Outer, Safety::Default, sym::orphaning, head_span); // TODO: are these the correct spans?
+                let inline_attr = attr::mk_attr_nested_word(
+                    &self.tcx.sess.psess.attr_id_generator,
+                    AttrStyle::Outer,
+                    Safety::Default,
+                    sym::inline,
+                    sym::always,
+                    head_span,
+                ); // TODO: are these the correct spans?
+                let orphaning_attr = attr::mk_attr_word(
+                    &self.tcx.sess.psess.attr_id_generator,
+                    AttrStyle::Outer,
+                    Safety::Default,
+                    sym::orphaning,
+                    head_span,
+                ); // TODO: are these the correct spans?
                 let attrs: AttrVec = thin_vec![inline_attr, orphaning_attr];
-                self.lower_attrs(closure_hir_id, &attrs, self.lower_span(body_block.span), Target::Expression);
+                self.lower_attrs(
+                    closure_hir_id,
+                    &attrs,
+                    self.lower_span(body_block.span),
+                    Target::Expression,
+                );
 
-                let closure_expr = self.arena.alloc(closure_expr_val); 
+                let closure_expr = self.arena.alloc(closure_expr_val);
 
                 // Create call
                 let empty_args: &'hir [hir::Expr<'hir>] = self.arena.alloc_from_iter([]);
-                let call_expr_val = self.expr(body_block.span, hir::ExprKind::Call(closure_expr, empty_args));
+                let call_expr_val =
+                    self.expr(body_block.span, hir::ExprKind::Call(closure_expr, empty_args));
                 let call_expr = self.arena.alloc(call_expr_val);
 
                 // Create outer body
@@ -2005,7 +2024,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 self.arena.alloc(outer_block_expr_val)
             } else {
                 let body_block =
-                self.with_loop_scope(loop_hir_id, |this| this.lower_block(body, false));
+                    self.with_loop_scope(loop_hir_id, |this| this.lower_block(body, false));
                 self.arena.alloc(self.expr_block(body_block))
             };
             self.arm(some_pat, body_expr, for_span)

@@ -820,7 +820,10 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
 
     fn sync_region_start(&mut self) -> &'ll Value {
         unsafe {
-            llvm::LLVMRustPositionBuilderAtStart(self.llbuilder, llvm::LLVMGetFirstBasicBlock(self.llfn()));
+            llvm::LLVMRustPositionBuilderAtStart(
+                self.llbuilder,
+                llvm::LLVMGetFirstBasicBlock(self.llfn()),
+            );
         }
         self.call_intrinsic("llvm.syncregion.start", &[], &[])
     }
