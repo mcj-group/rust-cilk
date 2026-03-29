@@ -2,7 +2,6 @@ use std::mem;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
-use rustc_ast::mut_visit::MutVisitor;
 use rustc_ast::*;
 use rustc_ast::mut_visit::MutVisitor;
 use rustc_ast_pretty::pprust::expr_to_string;
