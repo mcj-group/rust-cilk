@@ -189,7 +189,7 @@ pub fn walk_expr<'thir, 'tcx: 'thir, V: Visitor<'thir, 'tcx>>(
         Yield { value } => visitor.visit_expr(&visitor.thir()[value]),
         CilkSpawn { computation } => visitor.visit_expr(&visitor.thir()[computation]),
         CilkScope { block } => visitor.visit_block(&visitor.thir()[block]),
-        CilkSync => {},
+        CilkSync => {}
         Reattach => {}
     }
 }

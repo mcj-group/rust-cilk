@@ -2,13 +2,12 @@ use std::mem;
 use std::ops::ControlFlow;
 use std::sync::Arc;
 
-use rustc_ast::*;
 use rustc_ast::mut_visit::MutVisitor;
+use rustc_ast::*;
 use rustc_ast_pretty::pprust::expr_to_string;
 use rustc_data_structures::stack::ensure_sufficient_stack;
-use rustc_errors::msg;
+use rustc_errors::{DiagCtxtHandle, msg};
 use rustc_hir as hir;
-use rustc_errors::DiagCtxtHandle;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::definitions::DefPathData;
 use rustc_hir::{HirId, Target, find_attr};
@@ -21,10 +20,10 @@ use thin_vec::{ThinVec, thin_vec};
 use visit::{Visitor, walk_expr};
 
 use super::errors::{
-    AsyncCoroutinesNotSupported, AwaitOnlyInAsyncFnAndBlocks, ClosureCannotBeStatic,
-    CoroutineTooManyParameters, FunctionalRecordUpdateDestructuringAssignment,
-    InclusiveRangeWithNoEnd, MatchArmWithNoBody, NeverPatternWithBody, NeverPatternWithGuard,
-    UnderscoreExprLhsAssign, BadControlFlowInCilkFor
+    AsyncCoroutinesNotSupported, AwaitOnlyInAsyncFnAndBlocks, BadControlFlowInCilkFor,
+    ClosureCannotBeStatic, CoroutineTooManyParameters,
+    FunctionalRecordUpdateDestructuringAssignment, InclusiveRangeWithNoEnd, MatchArmWithNoBody,
+    NeverPatternWithBody, NeverPatternWithGuard, UnderscoreExprLhsAssign,
 };
 use super::{
     GenericArgsMode, ImplTraitContext, LoweringContext, ParamMode, ResolverAstLoweringExt,
@@ -62,7 +61,11 @@ struct ReplaceVariable<'hir> {
 }
 
 impl ReplaceVariable<'_> {
-    fn visit_path_replace(&mut self, Path { segments, span, tokens: _ }: &mut Path, e: &mut NodeId) {
+    fn visit_path_replace(
+        &mut self,
+        Path { segments, span, tokens: _ }: &mut Path,
+        e: &mut NodeId,
+    ) {
         self.visit_span(span);
         for PathSegment { ident, args: _, .. } in segments {
             if ident.name == self.target_ident.name {
@@ -109,24 +112,37 @@ impl MutVisitor for CilkControlFlow<'_> {
 
         match kind {
             ExprKind::Break(label, _) => {
-                if label.is_none() && self.inner_labels.is_empty() || label.is_some() && !self.inner_labels.contains(label) {
-                    *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("break") }));
+                if label.is_none() && self.inner_labels.is_empty()
+                    || label.is_some() && !self.inner_labels.contains(label)
+                {
+                    *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor {
+                        span: *span,
+                        keyword: String::from("break"),
+                    }));
                 } else {
                     mut_visit::walk_expr(self, e);
                 }
-            },
+            }
             ExprKind::Continue(label) => {
-                if label.is_some() && *label == self.outer_label || label.is_none() && self.inner_labels.is_empty() {
+                if label.is_some() && *label == self.outer_label
+                    || label.is_none() && self.inner_labels.is_empty()
+                {
                     *kind = ExprKind::Reattach;
                 } else if label.is_some() && !self.inner_labels.contains(label) {
-                    *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("continue") }));
+                    *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor {
+                        span: *span,
+                        keyword: String::from("continue"),
+                    }));
                 } else {
                     mut_visit::walk_expr(self, e);
                 }
-            },
+            }
             ExprKind::Ret(_) => {
-                *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor { span: *span, keyword: String::from("return") }));
-            },
+                *kind = ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor {
+                    span: *span,
+                    keyword: String::from("return"),
+                }));
+            }
             ExprKind::While(_, _, label) => {
                 self.inner_labels.push(*label);
                 mut_visit::walk_expr(self, e);
@@ -144,7 +160,7 @@ impl MutVisitor for CilkControlFlow<'_> {
             }
             ExprKind::Closure(_) => {}
             _ => mut_visit::walk_expr(self, e),
-        };    
+        };
     }
 }
 
@@ -2006,14 +2022,14 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let mut body_clone: Box<Block> = body.clone();
                 let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
-                let mut var_visitor = ReplaceVariable{
+                let mut var_visitor = ReplaceVariable {
                     target_ident: induction_var_ident,
                     new_ident: shadow_ident,
-                    map_targets: &mut map_targets
+                    map_targets: &mut map_targets,
                 };
                 // visit body block
                 var_visitor.visit_block(&mut body_clone);
-                for node_id in &map_targets{
+                for node_id in &map_targets {
                     self.resolver.partial_res_map.insert(*node_id, shadow_res);
                 }
 
@@ -2021,7 +2037,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let mut cf_visitor = CilkControlFlow::new(&dcx, opt_label);
                 cf_visitor.visit_block(&mut body_clone);
 
-                let body_block = self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
+                let body_block =
+                    self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
                 // let body_block = self.lower_block(&*body_clone, false);
                 // Wrap the body in a cilk_spawn
                 let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(body_block);

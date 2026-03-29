@@ -49,11 +49,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let block_and = match expr.kind {
             ExprKind::Reattach => {
                 let reattach_block = *this.scopes.reattach_targets.last().unwrap();
-                this.cfg.goto(
-                    block,
-                    source_info,
-                    reattach_block,
-                );
+                this.cfg.goto(block, source_info, reattach_block);
 
                 this.cfg.start_new_block().unit()
             }
@@ -902,7 +898,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // block that just reattaches
                 // multiple blocks can branch to it instead of having more than one reattach
                 let reattach_block = this.cfg.start_new_block();
-                
+
                 this.cfg.terminate(
                     block,
                     source_info,
@@ -919,13 +915,13 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                 let task_span = this.thir[computation].span;
                 let task_source_info = this.source_info(task_span);
-                this.cfg.goto(
-                    spawned_task,
-                    task_source_info,
-                    reattach_block,
-                );
+                this.cfg.goto(spawned_task, task_source_info, reattach_block);
                 // TODO: not sure what to put here for source_info
-                this.cfg.terminate(reattach_block, task_source_info, TerminatorKind::Reattach { continuation });
+                this.cfg.terminate(
+                    reattach_block,
+                    task_source_info,
+                    TerminatorKind::Reattach { continuation },
+                );
 
                 block = continuation;
                 block.unit()
