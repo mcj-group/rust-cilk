@@ -379,12 +379,12 @@ impl Config {
 
     pub(crate) fn maybe_download_opencilk_runtime(&self) {
         let url =
-            "https://github.com/aleph-oh/cheetah-1/archive/dev-darwin-bitcode-multiple-arch.tar.gz";
+            "https://github.com/OpenCilk/cheetah/archive/refs/tags/opencilk/v3.0.tar.gz";
         let destination = Path::new("src/llvm-project/cheetah");
         self.maybe_download_opencilk_component(
             url,
             destination,
-            "cheetah-1-dev-darwin-bitcode-multiple-arch",
+            "cheetah-opencilk-v3.0",
         );
     }
 
