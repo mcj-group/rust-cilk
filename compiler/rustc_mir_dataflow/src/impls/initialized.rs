@@ -534,6 +534,10 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {
             Self::update_bits(state, path, s)
         });
+        if let mir::TerminatorKind::Detach { spawned_task, .. } = terminator.kind {
+            println!("testing testing testing");
+            return TerminatorEdges::Single(spawned_task);
+        }
         if self.skip_unreachable_unwind.contains(location.block) {
             let mir::TerminatorKind::Drop { target, unwind, .. } = terminator.kind else { bug!() };
             assert_matches!(unwind, mir::UnwindAction::Cleanup(_));

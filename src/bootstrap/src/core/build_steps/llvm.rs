@@ -455,7 +455,11 @@ impl Step for Llvm {
             cfg.define("LLVM_TOOL_LLVM_RTDYLD_BUILD", "OFF");
         }
         // We also want to build the cheetah and cilktools runtimes to get the right ABI files.
+        // Cheetah uses __builtin_setjmp inside always_inline functions, which GCC rejects.
+        // Force clang for the runtimes sub-build via RUNTIMES_CMAKE_ARGS (consumed by
+        // llvm/runtimes/CMakeLists.txt and forwarded as cmake args to the ExternalProject).
         cfg.define("LLVM_ENABLE_RUNTIMES", "cheetah");
+        cfg.define("RUNTIMES_CMAKE_ARGS", "-DCMAKE_C_COMPILER=clang;-DCMAKE_CXX_COMPILER=clang++");
 
         let mut enabled_llvm_projects = Vec::new();
 
