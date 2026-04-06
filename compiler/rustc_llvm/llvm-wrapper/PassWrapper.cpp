@@ -390,7 +390,6 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
 }
 
 
-#ifdef LLVM_OPENCILK
 // Read the environment variable OPENCILK_ABI_PATH to get the path to the OpenCilk ABI for
 // this target.
 // FIXME(jhilton): we should detect this for the given architecture
@@ -411,7 +410,6 @@ void addTapirOptions(TargetLibraryInfoImpl &TLII)
   TLII.setTapirTargetOptions(std::make_unique<OpenCilkABIOptions>(
       FindOpenCilkABIBitCodeFilePath()));
 }
-#endif // LLVM_OPENCILK
 
 // Unfortunately, the LLVM C API doesn't provide a way to create the
 // TargetLibraryInfo pass, so we use this method to do so.
@@ -421,9 +419,7 @@ extern "C" void LLVMRustAddLibraryInfo(LLVMTargetMachineRef T,
   auto TargetTriple = Triple(unwrap(M)->getTargetTriple());
   TargetOptions *Options = &unwrap(T)->Options;
   auto TLII = TargetLibraryInfoImpl(TargetTriple);
-#ifdef LLVM_OPENCILK
   addTapirOptions(TLII);
-#endif
   if (DisableSimplifyLibCalls)
     TLII.disableAllFunctions();
   unwrap(PMR)->add(new TargetLibraryInfoWrapperPass(TLII));
@@ -696,9 +692,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   Triple TargetTriple(TheModule->getTargetTriple());
   std::unique_ptr<TargetLibraryInfoImpl> TLII(
       new TargetLibraryInfoImpl(TargetTriple));
-#ifdef LLVM_OPENCILK
   addTapirOptions(*TLII);
-#endif
   if (DisableSimplifyLibCalls)
     TLII->disableAllFunctions();
   FAM.registerPass([&] { return TargetLibraryAnalysis(*TLII); });
@@ -844,9 +838,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
   raw_string_ostream ThinLinkDataOS(ThinLTOBuffer->thin_link_data);
   bool IsLTO = OptStage == LLVMRustOptStage::ThinLTO ||
                OptStage == LLVMRustOptStage::FatLTO;
-#ifdef LLVM_OPENCILK
   bool const LowerTapir = TLII->hasTapirTarget();
-#endif
   if (!NoPrepopulatePasses) {
     for (const auto &C : PipelineStartEPCallbacks)
       PB.registerPipelineStartEPCallback(C);
@@ -859,11 +851,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     if (OptLevel == OptimizationLevel::O0 && !IsLTO) {
       // We manually schedule ThinLTOBufferPasses below, so don't pass the value
       // to enable it here.
-#ifdef LLVM_OPENCILK
       MPM = PB.buildO0DefaultPipeline(OptLevel, LowerTapir);
-#else
-      MPM = PB.buildO0DefaultPipeline(OptLevel);
-#endif
     } else {
       switch (OptStage) {
       case LLVMRustOptStage::PreLinkNoLTO:
@@ -871,11 +859,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
           // This is similar to LLVM's `buildFatLTODefaultPipeline`, where the
           // bitcode for embedding is obtained after performing
           // `ThinLTOPreLinkDefaultPipeline`.
-#ifdef LLVM_OPENCILK
           MPM.addPass(PB.buildThinLTOPreLinkDefaultPipeline(OptLevel, LowerTapir));
-#else
-          MPM.addPass(PB.buildThinLTOPreLinkDefaultPipeline(OptLevel));
-#endif
           MPM.addPass(ThinLTOBitcodeWriterPass(
               ThinLTODataOS, EmitThinLTOSummary ? &ThinLinkDataOS : nullptr));
           *ThinLTOBufferRef = ThinLTOBuffer.release();
@@ -884,11 +868,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
           MPM.addPass(
               createModuleToFunctionPassAdaptor(AnnotationRemarksPass()));
         } else {
-#ifdef LLVM_OPENCILK
           MPM = PB.buildPerModuleDefaultPipeline(OptLevel, LowerTapir);
-#else
-          MPM = PB.buildPerModuleDefaultPipeline(OptLevel);
-#endif
         }
         break;
       case LLVMRustOptStage::PreLinkThinLTO:
@@ -902,18 +882,10 @@ extern "C" LLVMRustResult LLVMRustOptimize(
       case LLVMRustOptStage::ThinLTO:
         // FIXME: Does it make sense to pass the ModuleSummaryIndex?
         // It only seems to be needed for C++ specific optimizations.
-#ifdef LLVM_OPENCILK
         MPM = PB.buildThinLTODefaultPipeline(OptLevel, nullptr, LowerTapir);
-#else
-        MPM = PB.buildThinLTODefaultPipeline(OptLevel, nullptr);
-#endif
         break;
       case LLVMRustOptStage::FatLTO:
-#ifdef LLVM_OPENCILK
         MPM = PB.buildLTODefaultPipeline(OptLevel, nullptr, LowerTapir);
-#else
-        MPM = PB.buildLTODefaultPipeline(OptLevel, nullptr);
-#endif
         NeedThinLTOBufferPasses = false;
         break;
       }

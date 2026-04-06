@@ -465,10 +465,8 @@ static Attribute::AttrKind fromRust(LLVMRustAttributeKind Kind) {
     return Attribute::SanitizeRealtime;
   case LLVMRustAttributeKind::SanitizeRealtimeBlocking:
     return Attribute::SanitizeRealtimeBlocking;
-#ifdef LLVM_OPENCILK
   case LLVMRustAttributeKind::Orphaning:
     return Attribute::Orphaning;
-#endif
   }
   report_fatal_error("bad LLVMRustAttributeKind");
 }
@@ -1090,29 +1088,6 @@ extern "C" void LLVMRustReplaceMDOperandWith(
 ) {
     unwrap<MDNode>(MD)->replaceOperandWith(Index, unwrap<Metadata>(New));
 }
-
-#ifndef LLVM_OPENCILK
-// Stub implementations for Tapir/OpenCilk LLVM APIs not present in standard LLVM.
-// These are only called when compiling Cilk code, which requires the OpenCilk LLVM backend.
-extern "C" LLVMValueRef LLVMBuildDetach(
-    LLVMBuilderRef B, LLVMBasicBlockRef Task,
-    LLVMBasicBlockRef Continuation, LLVMValueRef SyncRegion
-) {
-    llvm::report_fatal_error("LLVMBuildDetach requires OpenCilk LLVM");
-}
-
-extern "C" LLVMValueRef LLVMBuildReattach(
-    LLVMBuilderRef B, LLVMBasicBlockRef Continuation, LLVMValueRef SyncRegion
-) {
-    llvm::report_fatal_error("LLVMBuildReattach requires OpenCilk LLVM");
-}
-
-extern "C" LLVMValueRef LLVMBuildSync(
-    LLVMBuilderRef B, LLVMBasicBlockRef Target, LLVMValueRef SyncRegion
-) {
-    llvm::report_fatal_error("LLVMBuildSync requires OpenCilk LLVM");
-}
-#endif // LLVM_OPENCILK
 
 extern "C" LLVMMetadataRef LLVMRustDIBuilderCreateCompileUnit(
     LLVMDIBuilderRef Builder, unsigned Lang, LLVMMetadataRef FileRef,
