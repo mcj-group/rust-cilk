@@ -2115,7 +2115,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     closure_hir_id,
                     &attrs,
                     self.lower_span(body_block.span),
-                    Target::Expression,
+                    Target::Closure,
                 );
 
                 let closure_expr = self.arena.alloc(closure_expr_val);
@@ -2208,7 +2208,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let iter_arm = self.arm(iter_pat, loop_expr, for_span);
 
         let match_expr = match loop_kind {
-            ForLoopKind::For => {
+            ForLoopKind::For | ForLoopKind::CilkFor => {
                 // `::std::iter::IntoIterator::into_iter(<head>)`
                 let into_iter_expr = self.expr_call_lang_item_fn(
                     head_span,
@@ -2258,17 +2258,21 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir::MatchSource::ForLoopDesugar,
                 ))
             }
-            ForLoopKind::CilkFor => {
-                // FIXME(jhilton): this should call something for converting to a random-access iterator
-                // or otherwise semantically check that the expression is a random-access iterator (or
-                // only work on ranges for now).
-                // `::std::iter::IntoIterator::into_iter(<head>)`
-                self.expr_call_lang_item_fn(
-                    head_span,
-                    hir::LangItem::IntoIterIntoIter,
-                    arena_vec![self; head],
-                )
-            }
+            // Note Parisa: not sure why we has a seperate case for cilk_for
+            // things started working correctly when I made cilk_fors use the regular
+            // for match arm
+            // can probably delete this
+            // ForLoopKind::CilkFor => {
+            //     // FIXME(jhilton): this should call something for converting to a random-access iterator
+            //     // or otherwise semantically check that the expression is a random-access iterator (or
+            //     // only work on ranges for now).
+            //     // `::std::iter::IntoIterator::into_iter(<head>)`
+            //     self.expr_call_lang_item_fn(
+            //         head_span,
+            //         hir::LangItem::IntoIterIntoIter,
+            //         arena_vec![self; head],
+            //     )
+            // }
         };
 
         // This is effectively `{ let _result = ...; _result }`.
