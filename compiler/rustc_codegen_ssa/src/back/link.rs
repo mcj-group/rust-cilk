@@ -1303,6 +1303,14 @@ fn find_opencilk_runtime() -> PathBuf {
     PathBuf::from(dir)
 }
 
+fn find_cxx_abi() -> PathBuf {
+    // FIXME(parisa): do something smarter here to find the cxx runtime.
+    // should be found at: rust-cilk/build/x86_64-unknown-linux-gnu/llvm/lib/x86_64-unknown-linux-gnu/
+    let dir = std::env::var("OPENCILK_CXX_ABI_PATH").expect("OPENCILK_CXX_ABI_PATH must be set");
+    PathBuf::from(dir)
+}
+
+
 fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
     // This implementation fixes a bug where linking with -static failed since originally, the OpenCilk
     // runtime was always dynamically linked. On GNU Linux, -static forces all libraries to be linked
@@ -1335,7 +1343,6 @@ fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
 
         let as_needed = true;
         linker.link_dylib_by_name(name, verbatim, as_needed);
-        // TODO: does static linking need these?
         // TODO: should we add them always?
         linker.link_dylib_by_name("opencilk-personality-cpp", verbatim, as_needed);
         linker.link_dylib_by_name("stdc++", verbatim, as_needed);
@@ -1344,6 +1351,12 @@ fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
         // the symbols from the OpenCilk runtime.
         let whole_archive = false;
         linker.link_staticlib_by_name(name, verbatim, whole_archive);
+        linker.link_staticlib_by_name("opencilk-personality-cpp", verbatim, whole_archive);
+        linker.link_staticlib_by_name("c++abi", verbatim, whole_archive);
+
+        // so the compiler can find c++abi
+        let cxx_abi_search_dir = find_cxx_abi();
+        linker.include_path(&cxx_abi_search_dir);
     }
 }
 
