@@ -465,8 +465,9 @@ static Attribute::AttrKind fromRust(LLVMRustAttributeKind Kind) {
     return Attribute::SanitizeRealtime;
   case LLVMRustAttributeKind::SanitizeRealtimeBlocking:
     return Attribute::SanitizeRealtimeBlocking;
-  case LLVMRustAttributeKind::Orphaning:
-    return Attribute::Orphaning;
+  // TODO Parisa: probably readd this
+  // case LLVMRustAttributeKind::Orphaning:
+  //   return Attribute::Orphaning;
   }
   report_fatal_error("bad LLVMRustAttributeKind");
 }

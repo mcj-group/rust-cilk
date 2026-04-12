@@ -851,7 +851,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
     if (OptLevel == OptimizationLevel::O0 && !IsLTO) {
       // We manually schedule ThinLTOBufferPasses below, so don't pass the value
       // to enable it here.
-      MPM = PB.buildO0DefaultPipeline(OptLevel, LowerTapir);
+      MPM = PB.buildO0DefaultPipeline(OptLevel, ThinOrFullLTOPhase::None, LowerTapir);
     } else {
       switch (OptStage) {
       case LLVMRustOptStage::PreLinkNoLTO:
@@ -859,7 +859,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
           // This is similar to LLVM's `buildFatLTODefaultPipeline`, where the
           // bitcode for embedding is obtained after performing
           // `ThinLTOPreLinkDefaultPipeline`.
-          MPM.addPass(PB.buildThinLTOPreLinkDefaultPipeline(OptLevel, LowerTapir));
+          MPM.addPass(PB.buildThinLTOPreLinkDefaultPipeline(OptLevel));
           MPM.addPass(ThinLTOBitcodeWriterPass(
               ThinLTODataOS, EmitThinLTOSummary ? &ThinLinkDataOS : nullptr));
           *ThinLTOBufferRef = ThinLTOBuffer.release();
@@ -868,7 +868,7 @@ extern "C" LLVMRustResult LLVMRustOptimize(
           MPM.addPass(
               createModuleToFunctionPassAdaptor(AnnotationRemarksPass()));
         } else {
-          MPM = PB.buildPerModuleDefaultPipeline(OptLevel, LowerTapir);
+          MPM = PB.buildPerModuleDefaultPipeline(OptLevel, ThinOrFullLTOPhase::None, LowerTapir);
         }
         break;
       case LLVMRustOptStage::PreLinkThinLTO:
