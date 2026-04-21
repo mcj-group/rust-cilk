@@ -459,7 +459,7 @@ impl Step for Llvm {
         // Force clang for the runtimes sub-build via RUNTIMES_CMAKE_ARGS (consumed by
         // llvm/runtimes/CMakeLists.txt and forwarded as cmake args to the ExternalProject).
         cfg.define("LLVM_ENABLE_RUNTIMES", "cheetah;libcxx;libcxxabi;libunwind");
-        cfg.define("RUNTIMES_CMAKE_ARGS", "-DCMAKE_C_COMPILER=clang-15;-DCMAKE_CXX_COMPILER=clang++-15");
+        cfg.define("RUNTIMES_CMAKE_ARGS", "-DCMAKE_C_COMPILER=clang-19;-DCMAKE_CXX_COMPILER=clang++-19");
 
         let mut enabled_llvm_projects = Vec::new();
 
