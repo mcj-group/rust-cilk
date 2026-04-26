@@ -2,13 +2,15 @@ error[E0384]: cannot assign twice to immutable variable `y`
   --> $DIR/double_initialized_in_conditionally_spawned_task.rs:13:22
    |
 LL |     let y = 5;
-   |         -
-   |         |
-   |         first assignment to `y`
-   |         help: consider making this binding mutable: `mut y`
+   |         - first assignment to `y`
 LL |     if true {
 LL |         cilk_spawn { y = 1; };
    |                      ^^^^^ cannot assign twice to immutable variable
+   |
+help: consider making this binding mutable
+   |
+LL |     let mut y = 5;
+   |         +++
 
 error: aborting due to 1 previous error
 

@@ -1,6 +1,8 @@
-// run-pass
-
 #![feature(cilk)]
+
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn main() {
     cilk_for_in_cilk_spawn();

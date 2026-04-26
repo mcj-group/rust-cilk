@@ -1,11 +1,13 @@
-// run-pass
-
 #![feature(cilk)]
+// Tests a nested cilk_for loop.
+
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 fn main(){
     nested_cilk_for();
 }
 
-// -O3 does not compile FIXME: fix
 fn nested_cilk_for(){
     let a: usize = 0;
     let b: usize = 10;
