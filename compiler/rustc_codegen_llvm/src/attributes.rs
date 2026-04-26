@@ -12,7 +12,7 @@ use rustc_symbol_mangling::mangle_internal_symbol;
 use rustc_target::spec::{Arch, FramePointer, SanitizerSet, StackProbeType, StackProtector};
 use smallvec::SmallVec;
 
-use crate::context::{CodegenCx, SimpleCx};
+use crate::context::SimpleCx;
 use crate::errors::SanitizerMemtagRequiresMte;
 use crate::llvm::AttributePlace::Function;
 use crate::llvm::{
@@ -103,9 +103,8 @@ fn patchable_function_entry_attrs<'ll>(
     attrs
 }
 
-#[allow(dead_code)]
 fn orphaning_attr<'ll>(
-    cx: &CodegenCx<'ll, '_>,
+    cx: &SimpleCx<'ll>,
     orphaning: OrphaningAttr,
 ) -> Option<&'ll Attribute> {
     match orphaning {
@@ -557,6 +556,10 @@ pub(crate) fn llfn_attrs_from_instance<'ll, 'tcx>(
         {
             to_add.push(inline_attr);
         }
+    }
+
+    if let Some(attr) = orphaning_attr(cx, codegen_fn_attrs.orphaning) {
+        to_add.push(attr);
     }
 
     let function_features = function_features
