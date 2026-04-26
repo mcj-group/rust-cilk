@@ -1427,7 +1427,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             // LLVM InlineFunction should replace sync region of the orphaning function with the parent sync region
             if self.parallel_back_edges.contains(bb) {
-                println!("self.parallel_back_edges.contains(bb)");
                 bx.orphaning_syncregion(*self.sync_region(), &llbb);
             }
 

@@ -4,5 +4,3 @@ note: <unknown file>:0:0 loop-stripmine (other): Parallel loop does not appear p
    |
    = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
 
-note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
-

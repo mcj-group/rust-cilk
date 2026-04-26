@@ -2,6 +2,10 @@
 
 // Tests that a break within a subloop still fails if it targets the outer loop
 
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
+
 use std::sync::atomic::AtomicU64;
 
 fn main() {

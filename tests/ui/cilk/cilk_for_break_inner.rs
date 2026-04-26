@@ -1,7 +1,9 @@
 #![feature(cilk)]
 // Test that compiling succeeds when a break is placed with a sub loop in a cilk_for
 
-// run-pass
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 use std::sync::atomic::AtomicU64;
 

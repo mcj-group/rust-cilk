@@ -1,6 +1,10 @@
-// run-pass
-
 #![feature(cilk)]
+// Tests a for loop nested inside a cilk_for loop.
+
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
+
 use std::time::Instant;
 fn main(){
     cilk_for_for();

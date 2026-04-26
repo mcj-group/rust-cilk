@@ -1,4 +1,9 @@
 #![feature(cilk)]
+// Tests a deconstructed lowering of a cilk_for loop.
+
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 fn main(){
     deconstructed_cilk_for();
