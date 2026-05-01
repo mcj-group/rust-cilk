@@ -77,6 +77,7 @@ use crate::type_check::{Locations, MirTypeckRegionConstraints, MirTypeckResults}
 
 mod borrow_set;
 mod borrowck_errors;
+mod cilk;
 mod constraints;
 mod dataflow;
 mod def_use;

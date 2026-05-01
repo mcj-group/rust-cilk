@@ -142,6 +142,12 @@ pub enum ConstraintCategory<'tcx> {
     /// A constraint that doesn't correspond to anything the user sees.
     Internal,
 
+    /// A synthetic constraint introduced to extend the lifetime of a borrow
+    /// inside a cilk task across the matching cilk_sync. Has no user-visible
+    /// source span of its own; diagnostics should describe the borrow as
+    /// extended to the sync, not blame this constraint directly.
+    CilkContinuation,
+
     /// An internal constraint added when a region outlives a placeholder
     /// it cannot name and therefore has to outlive `'static`. The argument
     /// is the unnameable placeholder and the constraint is always between
