@@ -32,7 +32,7 @@ pub mod impls;
 pub mod move_paths;
 pub mod points;
 pub mod rustc_peek;
-mod task_info;
+pub mod task_info;
 mod un_derefer;
 pub mod value_analysis;
 
