@@ -15,23 +15,102 @@
 //! existing `Borrows` dataflow correctly keeps them in flight.
 //!
 //! This module owns the *plumbing* for that scheme:
+//!   * [`continuation_points`]        — for a child task, enumerate the parent
+//!     CFG points from its `Reattach` through its matching `Sync`.
 //!   * [`create_continuation_region`] — fresh region var, marked live at a
 //!     supplied set of points.
 //!   * [`add_extension_constraint`]   — push the `'?b: '?c` outlives edge.
 //!
-//! The two pieces still missing are the task-scope analysis (pair each
-//! `Reattach` with its matching `Sync` and enumerate the points between them)
-//! and the upvar-aware enumeration of borrow regions belonging to the task.
+//! The remaining piece is the upvar-aware enumeration of borrow regions
+//! belonging to the task — Q2 in the design notes.
 
+use rustc_data_structures::work_queue::WorkQueue;
 use rustc_infer::infer::NllRegionVariableOrigin;
-use rustc_middle::mir::{ConstraintCategory, Location};
+use rustc_middle::bug;
+use rustc_middle::mir::{Body, ConstraintCategory, Location, TerminatorKind};
 use rustc_middle::ty::RegionVid;
+use rustc_mir_dataflow::task_info::{Task, TaskInfo};
 use rustc_span::Span;
 
 use crate::BorrowckInferCtxt;
 use crate::constraints::OutlivesConstraint;
 use crate::renumber::RegionCtxt;
 use crate::type_check::{Locations, MirTypeckRegionConstraints};
+
+/// Enumerate the CFG locations on the parent's continuation flow that span
+/// from `task`'s `Reattach` up to (and including the block of) the matching
+/// `Sync`. These are the points the task's borrows must extend over to model
+/// cilk's "borrow stays live until sync" semantics.
+///
+/// The walk is a forward BFS in the parent's CFG starting at the block
+/// targeted by the `Reattach`, restricted to blocks whose [`Task`] is `task`'s
+/// parent. That restriction naturally:
+///   * skips over nested spawns' bodies (a nested task's blocks belong to a
+///     different `Task`), and
+///   * excludes the outer task's own blocks (they belong to `task`, not the
+///     parent).
+///
+/// Boundary terminators include their containing block in the result but do
+/// not propagate to successors:
+///   * `Sync` — the matching synchronization point.
+///   * `Return`, `UnwindResume`, `UnwindTerminate`, `CoroutineDrop` — the
+///     function-level implicit sync. Cilk semantics require any pending
+///     children to be synchronized before the function returns, so we treat
+///     these as a Sync for the purpose of bounding the continuation.
+///
+/// Cleanup blocks have no [`Task`] assignment in [`TaskInfo`], so they are
+/// filtered out before the parent-task check.
+#[allow(dead_code)] // wired up once Q2 (which-borrows-to-extend) lands.
+pub(crate) fn continuation_points<'tcx>(
+    body: &Body<'tcx>,
+    task_info: &TaskInfo,
+    task: Task,
+) -> Vec<Location> {
+    let parent = task_info.expect_parent_task(task);
+    let reattach_loc = task_info.expect_last_location(task);
+    let TerminatorKind::Reattach { continuation } =
+        body.basic_blocks[reattach_loc.block].terminator().kind
+    else {
+        bug!(
+            "expected last_location of task {task:?} to terminate with Reattach, found {:?}",
+            body.basic_blocks[reattach_loc.block].terminator().kind,
+        );
+    };
+
+    let mut queue = WorkQueue::with_none(body.basic_blocks.len());
+    queue.insert(continuation);
+
+    let mut points = Vec::new();
+    while let Some(bb) = queue.pop() {
+        let bb_data = &body.basic_blocks[bb];
+        if bb_data.is_cleanup {
+            continue;
+        }
+        if task_info.expect_task(bb) != parent {
+            continue;
+        }
+
+        for statement_index in 0..=bb_data.statements.len() {
+            points.push(Location { block: bb, statement_index });
+        }
+
+        match bb_data.terminator().kind {
+            TerminatorKind::Sync { .. }
+            | TerminatorKind::Return
+            | TerminatorKind::UnwindResume
+            | TerminatorKind::UnwindTerminate(_)
+            | TerminatorKind::CoroutineDrop => {
+                // Boundary; do not cross.
+            }
+            _ => {
+                for succ in bb_data.terminator().successors() {
+                    queue.insert(succ);
+                }
+            }
+        }
+    }
+    points
+}
 
 /// Create a fresh existential region var and mark it live at every point in
 /// `points`. Returns the new region's `RegionVid`.
