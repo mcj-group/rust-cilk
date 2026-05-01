@@ -548,19 +548,25 @@ impl TaskInfo {
 
     /// Find the parent task of `task`, panicking if `task` is an invalid index
     /// or the task has no parent.
-    #[allow(unused)]
     pub fn expect_parent_task(&self, task: Task) -> Task {
         self.tasks[task].kind.parent().expect("expected task to have parent, but was root!")
     }
 
     /// Find the [Location] where `task` reattaches to its parent, panicking if
     /// `task` is an invalid index or the task is the root task.
-    #[allow(unused)]
     pub fn expect_last_location(&self, task: Task) -> Location {
         self.tasks[task]
             .kind
             .last_location()
             .expect("expected task to have last location, but was root!")
+    }
+
+    /// Iterate over every non-root task. Yields each child task in index order.
+    pub fn child_tasks(&self) -> impl Iterator<Item = Task> + '_ {
+        self.tasks.iter_enumerated().filter_map(|(t, data)| match data.kind {
+            TaskKind::Root => None,
+            TaskKind::Child { .. } => Some(t),
+        })
     }
 
     /// Find the spindle associated with `block`, panicking if there is no such spindle.
@@ -586,7 +592,6 @@ impl TaskInfo {
     }
 
     /// Build a [TaskInfo] from the given [mir::Body].
-    #[allow(unused)]
     pub fn from_body<'a, 'tcx>(body: &'a mir::Body<'tcx>) -> Self {
         TaskInfoBuilder::from_body(body).build(body.basic_blocks.len())
     }
