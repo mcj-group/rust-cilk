@@ -1792,6 +1792,7 @@ impl<'tcx> RegionInferenceContext<'tcx> {
                 // Do not blame internal constraints if we can avoid it. Never blame
                 // the `'region: 'static` constraints introduced by placeholder outlives.
                 ConstraintCategory::Internal => 7,
+                ConstraintCategory::CilkContinuation => 7,
                 ConstraintCategory::OutlivesUnnameablePlaceholder(_) => 8,
             };
 
