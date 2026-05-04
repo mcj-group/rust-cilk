@@ -14,28 +14,91 @@
 //! propagation, those borrow regions cover the full continuation, so the
 //! existing `Borrows` dataflow correctly keeps them in flight.
 //!
-//! This module owns the *plumbing* for that scheme:
+//! Public entry point: [`extend_cilk_borrow_lifetimes`] runs once during typeck
+//! and applies the scheme to every child task in the body.
+//!
+//! Internals:
 //!   * [`continuation_points`]        — for a child task, enumerate the parent
 //!     CFG points from its `Reattach` through its matching `Sync`.
+//!   * [`borrow_regions_to_extend`]   — for a child task, enumerate the borrow
+//!     regions whose lifetime must cover the continuation.
 //!   * [`create_continuation_region`] — fresh region var, marked live at a
 //!     supplied set of points.
 //!   * [`add_extension_constraint`]   — push the `'?b: '?c` outlives edge.
-//!
-//! The remaining piece is the upvar-aware enumeration of borrow regions
-//! belonging to the task — Q2 in the design notes.
 
+use rustc_data_structures::fx::FxIndexSet;
 use rustc_data_structures::work_queue::WorkQueue;
 use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
-use rustc_middle::mir::{Body, ConstraintCategory, Location, TerminatorKind};
+use rustc_middle::mir::visit::{PlaceContext, Visitor};
+use rustc_middle::mir::{Body, ConstraintCategory, Local, Location, TerminatorKind};
 use rustc_middle::ty::RegionVid;
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
 use rustc_span::Span;
 
-use crate::BorrowckInferCtxt;
+use crate::borrow_set::BorrowSet;
 use crate::constraints::OutlivesConstraint;
+use crate::def_use;
 use crate::renumber::RegionCtxt;
 use crate::type_check::{Locations, MirTypeckRegionConstraints};
+use crate::BorrowckInferCtxt;
+
+/// Apply cilk lifetime extension to every child task in `body`.
+///
+/// For each child task in the body's [`TaskInfo`], this:
+///   1. Enumerates the parent CFG points spanning the task's `Reattach` to the
+///      matching `Sync` ([`continuation_points`]).
+///   2. Collects the borrow regions that may be in flight concurrently with
+///      the task's accesses ([`borrow_regions_to_extend`]).
+///   3. Synthesizes a fresh continuation region `'?c` live at those points
+///      ([`create_continuation_region`]).
+///   4. For each borrow region `'?b`, pushes `'?b: '?c` so propagation will
+///      grow `'?b` to cover the continuation ([`add_extension_constraint`]).
+///
+/// Tasks with an empty continuation point set or an empty region set are
+/// skipped — neither piece in isolation produces any constraint to add.
+///
+/// Run this during typeck, after the regular liveness constraints have been
+/// generated and before SCC construction. It writes only to
+/// `constraints.liveness_constraints` (seed values for `'?c`) and
+/// `constraints.outlives_constraints` (the `'?b: '?c` edges); the rest of the
+/// region-inference pipeline absorbs the new constraints unchanged.
+pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
+    body: &Body<'tcx>,
+    infcx: &BorrowckInferCtxt<'tcx>,
+    constraints: &mut MirTypeckRegionConstraints<'tcx>,
+    borrow_set: &BorrowSet<'tcx>,
+) {
+    // Fast path: a body with no `Detach` terminator has no spawned tasks, so
+    // there is nothing to extend. This also avoids running `TaskInfo`, whose
+    // spindle propagation across plain CFG joins (e.g. SwitchInt → Goto →
+    // join) is incomplete and would assert-fail on non-cilk bodies.
+    if !body
+        .basic_blocks
+        .iter()
+        .any(|bb_data| matches!(bb_data.terminator().kind, TerminatorKind::Detach { .. }))
+    {
+        return;
+    }
+
+    let task_info = TaskInfo::from_body(body);
+    for task in task_info.child_tasks() {
+        let points = continuation_points(body, &task_info, task);
+        if points.is_empty() {
+            continue;
+        }
+        let regions = borrow_regions_to_extend(body, &task_info, task, borrow_set);
+        if regions.is_empty() {
+            continue;
+        }
+        let reattach_loc = task_info.expect_last_location(task);
+        let span = body.basic_blocks[reattach_loc.block].terminator().source_info.span;
+        let c_region = create_continuation_region(infcx, constraints, points);
+        for b_region in regions {
+            add_extension_constraint(constraints, b_region, c_region, span);
+        }
+    }
+}
 
 /// Enumerate the CFG locations on the parent's continuation flow that span
 /// from `task`'s `Reattach` up to (and including the block of) the matching
@@ -60,7 +123,6 @@ use crate::type_check::{Locations, MirTypeckRegionConstraints};
 ///
 /// Cleanup blocks have no [`Task`] assignment in [`TaskInfo`], so they are
 /// filtered out before the parent-task check.
-#[allow(dead_code)] // wired up once Q2 (which-borrows-to-extend) lands.
 pub(crate) fn continuation_points<'tcx>(
     body: &Body<'tcx>,
     task_info: &TaskInfo,
@@ -112,6 +174,58 @@ pub(crate) fn continuation_points<'tcx>(
     points
 }
 
+/// Enumerate the borrow regions that need to outlive `task`'s continuation
+/// region.
+///
+/// A MIR-only walk (no HIR upvar analysis required): for each [`Local`]
+/// referenced in any of `task`'s blocks, look up `borrow_set.local_map[local]`
+/// and collect the regions of every borrow whose place starts with that local.
+/// The resulting set is exactly the set of borrows that *might* be in flight
+/// concurrently with the task's accesses, which is what cilk lifetime
+/// extension needs to model.
+///
+/// The walk uses [`def_use::categorize`] to skip storage marks
+/// (`StorageLive` / `StorageDead`) and other non-uses; only true defs, uses,
+/// and drops count as references. This matches the granularity of liveness
+/// analysis and ensures we don't count purely structural local mentions.
+///
+/// This is intentionally broader than HIR upvar analysis: it covers both
+/// borrows captured from the parent (the upvar case) and borrows issued
+/// inside the task body. Both want the same treatment — extend their region
+/// to the matching `Sync`.
+pub(crate) fn borrow_regions_to_extend<'tcx>(
+    body: &Body<'tcx>,
+    task_info: &TaskInfo,
+    task: Task,
+    borrow_set: &BorrowSet<'tcx>,
+) -> FxIndexSet<RegionVid> {
+    let mut visitor = ReferencedLocalsVisitor { locals: FxIndexSet::default() };
+    for bb in task_info.blocks_of(task) {
+        visitor.visit_basic_block_data(bb, &body.basic_blocks[bb]);
+    }
+
+    let mut regions = FxIndexSet::default();
+    for local in visitor.locals {
+        let Some(borrows) = borrow_set.local_map.get(&local) else { continue };
+        for &bw in borrows {
+            regions.insert(borrow_set[bw].region);
+        }
+    }
+    regions
+}
+
+struct ReferencedLocalsVisitor {
+    locals: FxIndexSet<Local>,
+}
+
+impl<'tcx> Visitor<'tcx> for ReferencedLocalsVisitor {
+    fn visit_local(&mut self, local: Local, context: PlaceContext, _location: Location) {
+        if def_use::categorize(context).is_some() {
+            self.locals.insert(local);
+        }
+    }
+}
+
 /// Create a fresh existential region var and mark it live at every point in
 /// `points`. Returns the new region's `RegionVid`.
 ///
@@ -119,7 +233,6 @@ pub(crate) fn continuation_points<'tcx>(
 /// scheme: callers pick the points spanning a task's `Reattach`-to-`Sync`
 /// continuation, and this function bakes that point-set into the region's
 /// initial value via `liveness_constraints`.
-#[allow(dead_code)] // wired up once the Reattach/Sync pairing analysis lands.
 pub(crate) fn create_continuation_region<'tcx>(
     infcx: &BorrowckInferCtxt<'tcx>,
     constraints: &mut MirTypeckRegionConstraints<'tcx>,
@@ -144,7 +257,6 @@ pub(crate) fn create_continuation_region<'tcx>(
 /// that any region error blamed on this constraint surfaces a useful location.
 /// Most cilk-driven errors will get blamed on the original borrow constraint
 /// instead, since `CilkContinuation` is given a low diagnostic interest.
-#[allow(dead_code)] // wired up once the borrow-region collection lands.
 pub(crate) fn add_extension_constraint<'tcx>(
     constraints: &mut MirTypeckRegionConstraints<'tcx>,
     borrow_region: RegionVid,

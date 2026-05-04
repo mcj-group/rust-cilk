@@ -346,9 +346,9 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
                 _ => {
                     terminator.successors().for_each(|t| {
                         if !builder.cleanup_blocks.contains(t) {
-                            // Same spindle, same task.
-                            builder.label_block_task(block, current_task);
-                            builder.label_block_spindle(block, current_spindle);
+                            // Same spindle, same task as the current block.
+                            builder.label_block_task(t, current_task);
+                            builder.label_block_spindle(t, current_spindle);
                         }
                     })
                 }
@@ -363,7 +363,9 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
     }
 
     fn validate_spindle_bounds(task_info: &TaskInfo) {
-        for spindle in task_info.block_spindles.indices() {
+        // `block_spindles` is keyed by `BasicBlock`; the values are the
+        // spindles whose bounds we want to check.
+        for &spindle in task_info.block_spindles.iter().flatten() {
             assert!(spindle.as_usize() < task_info.spindles.len());
         }
     }
@@ -567,6 +569,15 @@ impl TaskInfo {
             TaskKind::Root => None,
             TaskKind::Child { .. } => Some(t),
         })
+    }
+
+    /// Iterate over the basic blocks belonging to `task`. Each task's blocks are
+    /// the union of the blocks of its spindles.
+    pub fn blocks_of(&self, task: Task) -> impl Iterator<Item = BasicBlock> + '_ {
+        self.tasks[task]
+            .spindles
+            .iter()
+            .flat_map(move |spindle| self.spindles[spindle].blocks.iter().copied())
     }
 
     /// Find the spindle associated with `block`, panicking if there is no such spindle.
