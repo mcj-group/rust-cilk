@@ -66,6 +66,17 @@ pub(super) fn generate<'tcx>(
         &mut typeck.polonius_context,
         typeck.body,
     );
+
+    // Extend borrow regions inside cilk_spawn tasks to cover their parent's
+    // continuation up through the matching cilk_sync. This adds the
+    // `'?b: '?c` constraints region inference needs to detect conflicts
+    // between a spawned task and its parent's continuation.
+    crate::cilk::extend_cilk_borrow_lifetimes(
+        typeck.body,
+        typeck.infcx,
+        &mut typeck.constraints,
+        typeck.borrow_set,
+    );
 }
 
 // The purpose of `compute_relevant_live_locals` is to define the subset of `Local`
