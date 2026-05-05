@@ -2,7 +2,7 @@
 
 // Test that the return within a cilk_for doesn't cause an error if it's inside a closure
 
-// build-pass
+//@ build-pass
 
 fn main() {
     cilk_for i in 0..10 {

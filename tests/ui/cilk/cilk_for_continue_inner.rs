@@ -2,7 +2,9 @@
 
 // Test that continue in a subloop targets that loop, and isn't lowered to a reattach
 
-// run-pass
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 use std::sync::atomic::AtomicU64;
 

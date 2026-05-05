@@ -1,7 +1,9 @@
 #![feature(cilk)]
 // Test that continue in a subloop targetting the cilk_for is successfully lowered to a reattach
 
-// run-pass
+//@ run-pass
+//@ compile-flags: -C panic=abort
+//@ no-prefer-dynamic
 
 use std::sync::atomic::AtomicU64;
 

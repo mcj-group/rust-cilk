@@ -1,5 +1,5 @@
 error: cannot use `break` within cilk_for
-  --> $DIR/cilk_for_break_outer.rs:13:17
+  --> $DIR/cilk_for_break_outer.rs:16:17
    |
 LL |                 break 'outer;
    |                 ^^^^^^^^^^^^
