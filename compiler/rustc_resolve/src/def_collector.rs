@@ -398,6 +398,14 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
             ExprKind::Closure(..) | ExprKind::Gen(..) => {
                 self.create_def(expr.id, None, DefKind::Closure, expr.span)
             }
+            // Pre-register the synthetic closure that wraps the cilk_for body during HIR
+            // lowering. This ensures the resolver's disambiguator accounts for it before
+            // any user-written closures inside the body are registered, preventing a
+            // DefPathHash collision between the synthetic closure and user closures.
+            ExprKind::ForLoop { kind: ForLoopKind::CilkFor(closure_id), .. } => {
+                self.create_def(*closure_id, None, DefKind::Closure, expr.span);
+                self.invocation_parent.parent_def
+            }
             ExprKind::ConstBlock(constant) => {
                 // Under `min_generic_const_args` a `const { }` block sometimes
                 // corresponds to an anon const rather than an inline const.

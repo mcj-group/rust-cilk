@@ -3006,7 +3006,7 @@ impl<'a> Parser<'a> {
         opt_label: Option<Label>,
         lo: Span,
     ) -> PResult<'a, Box<Expr>> {
-        self.parse_expr_for_any_kind(opt_label, lo, |_this| ForLoopKind::CilkFor)
+        self.parse_expr_for_any_kind(opt_label, lo, |_this| ForLoopKind::CilkFor(DUMMY_NODE_ID))
     }
 
     /// Parses `for await? <src_pat> in <src_expr> <src_loop_block>` (`for` token already eaten).
@@ -3033,7 +3033,7 @@ impl<'a> Parser<'a> {
     ) -> PResult<'a, Box<Expr>> {
         let kind = find_kind(self);
         let feature = match kind {
-            ForLoopKind::CilkFor => Some(sym::cilk),
+            ForLoopKind::CilkFor(_) => Some(sym::cilk),
             ForLoopKind::ForAwait => Some(sym::async_for_loop),
             ForLoopKind::For => None,
         };

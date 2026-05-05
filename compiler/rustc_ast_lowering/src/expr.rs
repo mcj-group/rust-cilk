@@ -1948,7 +1948,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let some_arm = {
             let some_pat = self.pat_some(pat_span, pat);
 
-            let body_expr = if matches!(loop_kind, ForLoopKind::CilkFor) {
+            let body_expr = if let ForLoopKind::CilkFor(cilk_closure_node_id) = loop_kind {
                 let induction_var_ident = match &ast_pat.kind {
                     PatKind::Ident(_bind, ident, _other) => *ident,
                     _ => unreachable!(), // FIXME(CAIATHEN) will this ever happen?
@@ -2046,17 +2046,12 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
                 let stmts_slice = self.arena.alloc_from_iter([shadow_local_stmt, spawn_stmt]);
 
-                // Create and register the closure DefId
-                let closure_node_id = self.next_node_id();
-
+                // Look up the closure DefId that was pre-registered during name resolution
+                // (in def_collector.rs). Using local_def_id here (rather than create_def)
+                // ensures the disambiguator is shared with the resolver, preventing a
+                // DefPathHash collision with user-written closures inside the loop body.
                 let closure_hir_id = self.next_id();
-                let closure_def_id = self.create_def(
-                    closure_node_id,
-                    None,
-                    DefKind::Closure,
-                    DefPathData::Closure, // FIXME(CAIATHEN) I have no idea what this does
-                    body_block.span,
-                );
+                let closure_def_id = self.local_def_id(cilk_closure_node_id);
                 // Register the closure DefId
                 self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
 
@@ -2150,7 +2145,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let match_expr = {
             let iter = self.expr_ident(head_span, iter, iter_pat_nid);
             let next_expr = match loop_kind {
-                ForLoopKind::For | ForLoopKind::CilkFor => {
+                ForLoopKind::For | ForLoopKind::CilkFor(_) => {
                     // `Iterator::next(&mut iter)`
                     let ref_mut_iter = self.expr_mut_addr_of(head_span, iter);
                     self.expr_call_lang_item_fn(
@@ -2191,7 +2186,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         // `[opt_ident]: loop { ... }`
         // If we have a cilk_for we want to indicate this in the loop so the header can be
         // annotated correctly later.
-        let loop_source = if matches!(loop_kind, ForLoopKind::CilkFor) {
+        let loop_source = if matches!(loop_kind, ForLoopKind::CilkFor(_)) {
             hir::LoopSource::CilkFor
         } else {
             hir::LoopSource::ForLoop
@@ -2208,7 +2203,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let iter_arm = self.arm(iter_pat, loop_expr, for_span);
 
         let match_expr = match loop_kind {
-            ForLoopKind::For | ForLoopKind::CilkFor => {
+            ForLoopKind::For | ForLoopKind::CilkFor(_) => {
                 // `::std::iter::IntoIterator::into_iter(<head>)`
                 let into_iter_expr = self.expr_call_lang_item_fn(
                     head_span,

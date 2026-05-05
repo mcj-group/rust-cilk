@@ -1943,7 +1943,11 @@ pub enum ExprKind {
 pub enum ForLoopKind {
     For,
     ForAwait,
-    CilkFor,
+    /// `cilk_for` loop. The `NodeId` is pre-allocated for the synthetic closure
+    /// that wraps the loop body during HIR lowering. It must be registered as a
+    /// `DefKind::Closure` in the name resolver so that the def disambiguator
+    /// is shared between the resolver and lowering passes.
+    CilkFor(NodeId),
 }
 
 /// Used to differentiate between `async {}` blocks and `gen {}` blocks.
@@ -4264,8 +4268,8 @@ mod size_asserts {
     static_assert_size!(AssocItemKind, 16);
     static_assert_size!(Attribute, 32);
     static_assert_size!(Block, 32);
-    static_assert_size!(Expr, 72);
-    static_assert_size!(ExprKind, 40);
+    static_assert_size!(Expr, 80);
+    static_assert_size!(ExprKind, 48);
     static_assert_size!(Fn, 192);
     static_assert_size!(ForeignItem, 80);
     static_assert_size!(ForeignItemKind, 16);
