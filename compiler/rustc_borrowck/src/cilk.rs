@@ -43,6 +43,14 @@ use crate::renumber::RegionCtxt;
 use crate::type_check::{Locations, MirTypeckRegionConstraints};
 use crate::BorrowckInferCtxt;
 
+/// Returns `true` if `body` contains any cilk_spawn (i.e., any `Detach`
+/// terminator). Used to fast-path past the cilk machinery for ordinary code.
+pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
+    body.basic_blocks
+        .iter()
+        .any(|bb_data| matches!(bb_data.terminator().kind, TerminatorKind::Detach { .. }))
+}
+
 /// Apply cilk lifetime extension to every child task in `body`.
 ///
 /// For each child task in the body's [`TaskInfo`], this:
@@ -69,15 +77,10 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
     constraints: &mut MirTypeckRegionConstraints<'tcx>,
     borrow_set: &BorrowSet<'tcx>,
 ) {
-    // Fast path: a body with no `Detach` terminator has no spawned tasks, so
-    // there is nothing to extend. This also avoids running `TaskInfo`, whose
-    // spindle propagation across plain CFG joins (e.g. SwitchInt → Goto →
-    // join) is incomplete and would assert-fail on non-cilk bodies.
-    if !body
-        .basic_blocks
-        .iter()
-        .any(|bb_data| matches!(bb_data.terminator().kind, TerminatorKind::Detach { .. }))
-    {
+    // Fast path: skip everything for bodies without cilk constructs.
+    // `TaskInfo`'s spindle propagation across plain CFG joins (e.g. SwitchInt
+    // → Goto → join) is incomplete and would assert-fail on non-cilk bodies.
+    if !body_has_cilk_tasks(body) {
         return;
     }
 
@@ -177,41 +180,69 @@ pub(crate) fn continuation_points<'tcx>(
 /// Enumerate the borrow regions that need to outlive `task`'s continuation
 /// region.
 ///
-/// A MIR-only walk (no HIR upvar analysis required): for each [`Local`]
-/// referenced in any of `task`'s blocks, look up `borrow_set.local_map[local]`
-/// and collect the regions of every borrow whose place starts with that local.
-/// The resulting set is exactly the set of borrows that *might* be in flight
-/// concurrently with the task's accesses, which is what cilk lifetime
-/// extension needs to model.
+/// A borrow is extended if and only if both:
+///   1. It is issued in `task` (i.e., `bw.reserve_location.block ∈ task`).
+///   2. Its `borrowed_place`'s root local is referenced somewhere outside
+///      `task` — in the parent's continuation, in a sibling task, or in
+///      function-level code. A borrow whose borrowed local is *only* used
+///      inside `task` cannot conflict with anything in the parent's
+///      continuation, so extending it would only cause spurious conflicts
+///      at task-internal storage operations (e.g. the `StorageDead` of a
+///      task-private aggregate the borrow points into).
 ///
-/// The walk uses [`def_use::categorize`] to skip storage marks
-/// (`StorageLive` / `StorageDead`) and other non-uses; only true defs, uses,
-/// and drops count as references. This matches the granularity of liveness
-/// analysis and ensures we don't count purely structural local mentions.
+/// The "issued in `task`" filter avoids extending parent-side borrows that
+/// happen to mention a captured local. The "referenced outside `task`"
+/// filter avoids extending purely intra-task short-lived borrows (e.g.
+/// formatter argument arrays inside `println!` macro expansions).
 ///
-/// This is intentionally broader than HIR upvar analysis: it covers both
-/// borrows captured from the parent (the upvar case) and borrows issued
-/// inside the task body. Both want the same treatment — extend their region
-/// to the matching `Sync`.
+/// Cleanup blocks are skipped — they have no `Task` assignment in
+/// [`TaskInfo`].
 pub(crate) fn borrow_regions_to_extend<'tcx>(
     body: &Body<'tcx>,
     task_info: &TaskInfo,
     task: Task,
     borrow_set: &BorrowSet<'tcx>,
 ) -> FxIndexSet<RegionVid> {
-    let mut visitor = ReferencedLocalsVisitor { locals: FxIndexSet::default() };
-    for bb in task_info.blocks_of(task) {
-        visitor.visit_basic_block_data(bb, &body.basic_blocks[bb]);
-    }
+    let externally_referenced = locals_referenced_outside_task(body, task_info, task);
 
     let mut regions = FxIndexSet::default();
-    for local in visitor.locals {
-        let Some(borrows) = borrow_set.local_map.get(&local) else { continue };
-        for &bw in borrows {
-            regions.insert(borrow_set[bw].region);
+    for (_, bw) in borrow_set.location_map.iter() {
+        let issue_block = bw.reserve_location.block;
+        if body.basic_blocks[issue_block].is_cleanup {
+            continue;
         }
+        if task_info.expect_task(issue_block) != task {
+            continue;
+        }
+        if !externally_referenced.contains(&bw.borrowed_place.local) {
+            continue;
+        }
+        regions.insert(bw.region);
     }
     regions
+}
+
+/// Walk every non-cleanup block that does NOT belong to `task` and collect
+/// the set of `Local`s referenced in a non-storage context. These are the
+/// locals that the parent task (or some sibling) may access concurrently
+/// with `task`, and hence the locals whose borrows from inside `task` need
+/// lifetime extension.
+fn locals_referenced_outside_task(
+    body: &Body<'_>,
+    task_info: &TaskInfo,
+    task: Task,
+) -> FxIndexSet<Local> {
+    let mut visitor = ReferencedLocalsVisitor { locals: FxIndexSet::default() };
+    for (bb, bb_data) in body.basic_blocks.iter_enumerated() {
+        if bb_data.is_cleanup {
+            continue;
+        }
+        if task_info.expect_task(bb) == task {
+            continue;
+        }
+        visitor.visit_basic_block_data(bb, bb_data);
+    }
+    visitor.locals
 }
 
 struct ReferencedLocalsVisitor {

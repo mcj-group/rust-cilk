@@ -1,9 +1,9 @@
 use std::fmt;
 
-use rustc_data_structures::fx::FxIndexMap;
+use rustc_data_structures::fx::{FxHashSet, FxIndexMap};
 use rustc_index::bit_set::{DenseBitSet, MixedBitSet};
 use rustc_middle::mir::{
-    self, BasicBlock, Body, CallReturnPlaces, Location, Place, TerminatorEdges,
+    self, BasicBlock, Body, CallReturnPlaces, ConstraintCategory, Location, Place, TerminatorEdges,
 };
 use rustc_middle::ty::{RegionVid, TyCtxt};
 use rustc_mir_dataflow::fmt::DebugWithContext;
@@ -11,10 +11,11 @@ use rustc_mir_dataflow::impls::{
     EverInitializedPlaces, EverInitializedPlacesDomain, MaybeUninitializedPlaces,
     MaybeUninitializedPlacesDomain,
 };
+use rustc_mir_dataflow::task_info::{Task, TaskInfo};
 use rustc_mir_dataflow::{Analysis, GenKill, JoinSemiLattice};
 use tracing::debug;
 
-use crate::{BorrowSet, PlaceConflictBias, PlaceExt, RegionInferenceContext, places_conflict};
+use crate::{BorrowSet, PlaceConflictBias, PlaceExt, RegionInferenceContext, cilk, places_conflict};
 
 // This analysis is different to most others. Its results aren't computed with
 // `iterate_to_fixpoint`, but are instead composed from the results of three sub-analyses that are
@@ -183,6 +184,21 @@ struct OutOfScopePrecomputer<'a, 'tcx> {
     visit_stack: Vec<mir::BasicBlock>,
     body: &'a Body<'tcx>,
     regioncx: &'a RegionInferenceContext<'tcx>,
+    /// `Some` if `body` contains any `cilk_spawn`. When present, the kill walk
+    /// for a borrow whose issue location lies inside a child task *and* whose
+    /// region has been extended by a `CilkContinuation` constraint is allowed
+    /// to traverse the task's own blocks without a region-based kill check,
+    /// so the borrow flows through to the parent's continuation via the
+    /// reattach edge. Non-extended task-internal borrows (e.g. short-lived
+    /// formatter borrows inside a `println!` expansion) are killed normally,
+    /// since their `borrowed_place` is task-private and they cannot conflict
+    /// with parent-side accesses.
+    task_info: Option<TaskInfo>,
+    /// Region vars that appear as `sup` of a `CilkContinuation` outlives
+    /// constraint — i.e., the regions of borrows that have been extended by
+    /// the cilk lifetime-extension scheme. Only borrows whose region is in
+    /// this set get the kill-suppression treatment described above.
+    cilk_extended_regions: FxHashSet<RegionVid>,
     borrows_out_of_scope_at_location: FxIndexMap<Location, Vec<BorrowIndex>>,
 }
 
@@ -192,11 +208,23 @@ impl<'tcx> OutOfScopePrecomputer<'_, 'tcx> {
         regioncx: &RegionInferenceContext<'tcx>,
         borrow_set: &BorrowSet<'tcx>,
     ) -> FxIndexMap<Location, Vec<BorrowIndex>> {
+        let task_info = cilk::body_has_cilk_tasks(body).then(|| TaskInfo::from_body(body));
+        let cilk_extended_regions: FxHashSet<RegionVid> = if task_info.is_some() {
+            regioncx
+                .outlives_constraints()
+                .filter(|c| matches!(c.category, ConstraintCategory::CilkContinuation))
+                .map(|c| c.sup)
+                .collect()
+        } else {
+            FxHashSet::default()
+        };
         let mut prec = OutOfScopePrecomputer {
             visited: DenseBitSet::new_empty(body.basic_blocks.len()),
             visit_stack: vec![],
             body,
             regioncx,
+            task_info,
+            cilk_extended_regions,
             borrows_out_of_scope_at_location: FxIndexMap::default(),
         };
         for (borrow_index, borrow_data) in borrow_set.iter_enumerated() {
@@ -208,6 +236,16 @@ impl<'tcx> OutOfScopePrecomputer<'_, 'tcx> {
         prec.borrows_out_of_scope_at_location
     }
 
+    /// Returns the task `block` belongs to, or `None` if the body has no cilk
+    /// tasks or `block` is a cleanup block (which `TaskInfo` does not assign).
+    fn task_of(&self, block: mir::BasicBlock) -> Option<Task> {
+        let task_info = self.task_info.as_ref()?;
+        if self.body.basic_blocks[block].is_cleanup {
+            return None;
+        }
+        Some(task_info.expect_task(block))
+    }
+
     fn precompute_borrows_out_of_scope(
         &mut self,
         borrow_index: BorrowIndex,
@@ -217,17 +255,38 @@ impl<'tcx> OutOfScopePrecomputer<'_, 'tcx> {
         let first_block = first_location.block;
         let first_bb_data = &self.body.basic_blocks[first_block];
 
+        // The borrow's "home" task: if the borrow was issued inside a cilk
+        // task *and* its region is on the `sup` side of a `CilkContinuation`
+        // constraint (i.e., the borrow has been extended to cover the
+        // parent's continuation), we let its dataflow walk traverse the
+        // task's own blocks without a region-based kill check. This lets the
+        // borrow reach the task's `Reattach` and propagate through to the
+        // parent's continuation, where conflicts with the parent are
+        // detected. Task-internal borrows that are *not* extended (e.g.
+        // formatter aggregates inside a `println!` expansion) keep the
+        // standard kill behaviour.
+        let borrow_task = if self.cilk_extended_regions.contains(&borrow_region) {
+            self.task_of(first_block)
+        } else {
+            None
+        };
+
         // This is the first block, we only want to visit it from the creation of the borrow at
         // `first_location`.
         let first_lo = first_location.statement_index;
         let first_hi = first_bb_data.statements.len();
 
-        if let Some(kill_stmt) = self.regioncx.first_non_contained_inclusive(
-            borrow_region,
-            first_block,
-            first_lo,
-            first_hi,
-        ) {
+        // Skip the kill check if we're still inside the borrow's home task —
+        // see the `borrow_task` comment above.
+        let skip_kill_check = borrow_task.is_some() && self.task_of(first_block) == borrow_task;
+        if !skip_kill_check
+            && let Some(kill_stmt) = self.regioncx.first_non_contained_inclusive(
+                borrow_region,
+                first_block,
+                first_lo,
+                first_hi,
+            )
+        {
             let kill_location = Location { block: first_block, statement_index: kill_stmt };
             // If region does not contain a point at the location, then add to list and skip
             // successor locations.
@@ -254,8 +313,10 @@ impl<'tcx> OutOfScopePrecomputer<'_, 'tcx> {
         while let Some(block) = self.visit_stack.pop() {
             let bb_data = &self.body[block];
             let num_stmts = bb_data.statements.len();
-            if let Some(kill_stmt) =
-                self.regioncx.first_non_contained_inclusive(borrow_region, block, 0, num_stmts)
+            let skip_kill_check = borrow_task.is_some() && self.task_of(block) == borrow_task;
+            if !skip_kill_check
+                && let Some(kill_stmt) =
+                    self.regioncx.first_non_contained_inclusive(borrow_region, block, 0, num_stmts)
             {
                 let kill_location = Location { block, statement_index: kill_stmt };
                 // If region does not contain a point at the location, then add to list and skip
