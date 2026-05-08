@@ -1,0 +1,25 @@
+error[E0597]: `x` does not live long enough
+  --> $DIR/cilk_spawn_borrow_implicit_sync.rs:13:17
+   |
+LL |     let mut x = vec![10, 11];
+   |         ----- binding `x` declared here
+LL |     cilk_spawn {
+LL |         let y = &mut x;
+   |                 ^^^^^^ borrowed value does not live long enough
+...
+LL | }
+   | - `x` dropped here while still borrowed
+
+error[E0499]: cannot borrow `x` as mutable more than once at a time
+  --> $DIR/cilk_spawn_borrow_implicit_sync.rs:16:5
+   |
+LL |         let y = &mut x;
+   |                 ------ first mutable borrow occurs here
+...
+LL |     x.push(10);
+   |     ^ second mutable borrow occurs here
+
+error: aborting due to 2 previous errors
+
+Some errors have detailed explanations: E0499, E0597.
+For more information about an error, try `rustc --explain E0499`.
