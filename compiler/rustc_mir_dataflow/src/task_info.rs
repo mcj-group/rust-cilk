@@ -281,16 +281,6 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
         self.label_block_task(target, current_task);
     }
 
-    /// Modify this [TaskInfo] by recording a `SwitchInt` where the current task is `current_task`
-    /// and the targets are given by `targets`.
-    fn switch_int_to(&mut self, current_task: Task, targets: impl Iterator<Item = BasicBlock>) {
-        targets.for_each(|t| {
-            self.associate_new_spindle(t, current_task);
-            // Associate the current task with each of the jump targets.
-            self.label_block_task(t, current_task);
-        });
-    }
-
     /// Construct a [TaskInfoBuilder] from `body`.
     pub fn from_body(body: &'body mir::Body<'tcx>) -> Self {
         let mut builder = Self {
@@ -337,10 +327,6 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
 
                 mir::TerminatorKind::Sync { target } => {
                     builder.sync_to(current_task, *target);
-                }
-
-                mir::TerminatorKind::SwitchInt { discr: _, targets } => {
-                    builder.switch_int_to(current_task, targets.all_targets().iter().copied());
                 }
 
                 _ => {
