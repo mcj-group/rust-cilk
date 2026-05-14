@@ -2,14 +2,14 @@
 // module is preserved as authored upstream; allow rather than mutate it.
 #![allow(unreachable_pub)]
 
-use std::collections::hash_map::Entry;
-
 use rustc_data_structures::work_queue::WorkQueue;
-use rustc_data_structures::{fx::FxHashMap, sync::HashMapExt};
+use rustc_data_structures::{fx::FxHashMap, fx::FxIndexSet, sync::HashMapExt};
 use rustc_index::IndexSlice;
 use rustc_index::{bit_set::DenseBitSet, IndexVec};
 use rustc_middle::mir::{self, BasicBlock, Location};
 use smallvec::SmallVec;
+
+use itertools::Itertools;
 
 use crate::fmt::DebugWithContext;
 
@@ -213,7 +213,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
     /// Associate a new spindle in `task` with `block`.
     fn associate_new_spindle(&mut self, block: BasicBlock, task: Task) {
         let spindle = self.spindles.push(SpindleDataBuilder { task, entry: block });
-        self.block_spindles.insert_same(block, spindle);
+        self.block_spindles.insert(block, spindle);
     }
 
     /// Label `block` with `task`.
@@ -223,25 +223,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
 
     /// Label `block` with `spindle`.
     fn label_block_spindle(&mut self, block: BasicBlock, spindle: Spindle) {
-        self.block_spindles.insert_same(block, spindle);
-    }
-
-    /// Modify this [TaskInfo] by recording a `Detach` where the current task is `current_task`,
-    /// the spawned task is `spawned_task`, and the continuation is `continuation`.
-    fn detach_to(
-        &mut self,
-        current_task: Task,
-        spawned_task: BasicBlock,
-        continuation: BasicBlock,
-    ) {
-        // First, update our task state.
-        let new_task = TaskDataBuilder::new_child(&mut self.tasks, current_task);
-        self.label_block_task(spawned_task, new_task);
-        self.label_block_task(continuation, current_task);
-
-        // Next, add spindles for both the spawned task and the continuation.
-        self.associate_new_spindle(spawned_task, new_task);
-        self.associate_new_spindle(continuation, current_task);
+        self.block_spindles.insert(block, spindle);
     }
 
     /// Modify this [TaskInfo] by recording a `Reattach` where the current task is `current_task`
@@ -267,20 +249,6 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
         }
     }
 
-    /// Modify this [TaskInfo] by recording a `Sync` where the current task is `current_task`
-    /// and the target is `target`.
-    fn sync_to(&mut self, current_task: Task, target: BasicBlock) {
-        // Make a new spindle if one doesn't already exist.
-        // We sometimes need a phi spindle?
-        if let Entry::Vacant(e) = self.block_spindles.entry(target) {
-            let new_spindle =
-                self.spindles.push(SpindleDataBuilder { task: current_task, entry: target });
-            e.insert(new_spindle);
-        }
-        // We don't have to do anything for tasks. After a sync, it's still the same task.
-        self.label_block_task(target, current_task);
-    }
-
     /// Construct a [TaskInfoBuilder] from `body`.
     pub fn from_body(body: &'body mir::Body<'tcx>) -> Self {
         let mut builder = Self {
@@ -293,6 +261,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
             cleanup_blocks: cleanup_blocks(body),
         };
 
+        // First pass: assign tasks to blocks.
         for (block, block_data) in mir::traversal::preorder(body) {
             if builder.unwind_subgraph.contains(block) {
                 continue;
@@ -301,24 +270,16 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
             let block_tasks_empty = builder.block_tasks.is_empty();
             let current_task = *builder.block_tasks.entry(block).or_insert_with(|| {
                 assert!(block_tasks_empty, "expected the first task to be the only orphan task!");
-
                 builder.tasks.push(TaskDataBuilder::root())
-            });
-
-            let block_spindles_empty = builder.block_spindles.is_empty();
-            let current_spindle = *builder.block_spindles.entry(block).or_insert_with(|| {
-                assert!(
-                    block_spindles_empty,
-                    "expected the first spindle to be the only non-associated spindle!"
-                );
-                builder.spindles.push(SpindleDataBuilder { task: current_task, entry: block })
             });
 
             let location = Location { block, statement_index: block_data.statements.len() };
             let terminator = block_data.terminator();
             match &terminator.kind {
                 mir::TerminatorKind::Detach { spawned_task, continuation } => {
-                    builder.detach_to(current_task, *spawned_task, *continuation);
+                    let new_task = TaskDataBuilder::new_child(&mut builder.tasks, current_task);
+                    builder.label_block_task(*spawned_task, new_task);
+                    builder.label_block_task(*continuation, current_task);
                 }
 
                 mir::TerminatorKind::Reattach { continuation } => {
@@ -326,17 +287,68 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
                 }
 
                 mir::TerminatorKind::Sync { target } => {
-                    builder.sync_to(current_task, *target);
+                    // After a sync, it's still the same task.
+                    builder.label_block_task(*target, current_task);
                 }
 
                 _ => {
                     terminator.successors().for_each(|t| {
                         if !builder.cleanup_blocks.contains(t) {
-                            // Same spindle, same task as the current block.
                             builder.label_block_task(t, current_task);
-                            builder.label_block_spindle(t, current_spindle);
                         }
                     })
+                }
+            }
+        }
+
+        // Second pass: assign spindles to blocks.
+        let predecessors = body.basic_blocks.predecessors();
+        let mut updating = true;
+        while updating {
+            updating = false;
+            for (block, _) in mir::traversal::preorder(body) {
+                if builder.unwind_subgraph.contains(block) {
+                    continue;
+                }
+
+                let current_task = builder.block_tasks[&block];
+                
+                if let Some(&current_spindle) = builder.block_spindles.get(&block) {
+                    if builder.spindles[current_spindle].entry == block {
+                        continue;
+                    }
+                }
+
+                let block_predecessor = &predecessors[block];
+                
+                if block_predecessor.is_empty() {
+                    builder.associate_new_spindle(block, current_task);
+                    updating = true;
+                    continue;
+                }
+
+                let mut predecessor_terminators = block_predecessor.iter().map(|b| body.basic_blocks[*b].terminator());
+                if predecessor_terminators.any(|t| match t.kind {
+                    mir::TerminatorKind::Detach { .. } | mir::TerminatorKind::Reattach { .. } | mir::TerminatorKind::Sync { .. } => true,
+                    _ => false,
+                }) {
+                    builder.associate_new_spindle(block, current_task);
+                    updating = true;
+                    continue;
+                }
+
+                let predecessor_spindles = block_predecessor.iter().filter_map(|b| builder.block_spindles.get(b)).collect::<FxIndexSet<_>>();
+                match predecessor_spindles.iter().exactly_one() {
+                    Ok(&&spindle) => {
+                        if builder.block_spindles.get(&block) != Some(&spindle) {
+                            builder.label_block_spindle(block, spindle);
+                            updating = true;
+                        }
+                    },
+                    Err(_) => {
+                        builder.associate_new_spindle(block, current_task);
+                        updating = true;
+                    },
                 }
             }
         }
