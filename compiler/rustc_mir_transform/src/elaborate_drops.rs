@@ -131,7 +131,7 @@ impl InitializationData<'_, '_> {
     }
 
     fn maybe_init_uninit(&self, path: MovePathIndex) -> (bool, bool) {
-        (self.inits.get().contains(path), self.uninits.get().contains(path))
+        (self.inits.get().contains(path), self.uninits.get().current.contains(path))
     }
 }
 

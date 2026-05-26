@@ -2007,7 +2007,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
         place_span: (PlaceRef<'tcx>, Span),
         state: &BorrowckDomain,
     ) {
-        let maybe_uninits = &state.uninits;
+        let maybe_uninits = &state.uninits.current;
 
         // Bad scenarios:
         //
@@ -2112,7 +2112,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
         place_span: (PlaceRef<'tcx>, Span),
         state: &BorrowckDomain,
     ) {
-        let maybe_uninits = &state.uninits;
+        let maybe_uninits = &state.uninits.current;
 
         // Bad scenarios:
         //
@@ -2311,7 +2311,7 @@ impl<'a, 'tcx> MirBorrowckCtxt<'a, '_, 'tcx> {
 
             // Shallow so that we'll stop at any dereference; we'll
             // report errors about issues with such bases elsewhere.
-            let maybe_uninits = &state.uninits;
+            let maybe_uninits = &state.uninits.current;
 
             // Find the shortest uninitialized prefix you can reach
             // without going over a Deref.

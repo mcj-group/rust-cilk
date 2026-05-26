@@ -1241,8 +1241,12 @@ impl<T: Idx> BitRelations<MixedBitSet<T>> for MixedBitSet<T> {
         }
     }
 
-    fn intersect(&mut self, _other: &MixedBitSet<T>) -> bool {
-        unimplemented!("implement if/when necessary");
+    fn intersect(&mut self, other: &MixedBitSet<T>) -> bool {
+        match (self, other) {
+            (MixedBitSet::Small(set), MixedBitSet::Small(other)) => set.intersect(other),
+            (MixedBitSet::Large(set), MixedBitSet::Large(other)) => set.intersect(other),
+            _ => panic!("MixedBitSet size mismatch"),
+        }
     }
 }
 

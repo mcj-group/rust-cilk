@@ -12,10 +12,11 @@ use smallvec::SmallVec;
 use tracing::{debug, instrument};
 
 use crate::drop_flag_effects::{DropFlagState, InactiveVariants};
+use crate::fmt::DebugWithContext;
+use crate::framework::BitSetExt;
 use crate::move_paths::{HasMoveData, InitIndex, InitKind, LookupResult, MoveData, MovePathIndex};
 use crate::{
-    Analysis, GenKill, MaybeReachable, drop_flag_effects, drop_flag_effects_for_function_entry,
-    drop_flag_effects_for_location, on_all_children_bits, on_lookup_result_bits,
+    Analysis, GenKill, JoinSemiLattice, MaybeReachable, drop_flag_effects, drop_flag_effects_for_function_entry, drop_flag_effects_for_location, on_all_children_bits, on_lookup_result_bits
 };
 
 // Used by both `MaybeInitializedPlaces` and `MaybeUninitializedPlaces`.
@@ -492,8 +493,69 @@ impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
 }
 
 /// There can be many more `MovePathIndex` than there are locals in a MIR body.
-/// We use a mixed bitset to avoid paying too high a memory footprint.
-pub type MaybeUninitializedPlacesDomain = MixedBitSet<MovePathIndex>;
+/// We use mixed bitsets to avoid paying too high a memory footprint.
+/// current denotes which
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct MaybeUninitializedPlacesDomain {
+    /// which paths are maybe uninitialized in the current task
+    /// this is the important part for determining liveness
+    pub current: MixedBitSet<MovePathIndex>,
+    /// which paths are maybe uninitialized across all child tasks
+    /// in other words, which values would be still uninitialized after a sync, always a subset of current
+    /// these serve as auxiliary bits used to track liveness in multi-task functions
+    pub children: MixedBitSet<MovePathIndex>,
+    /// flags state at the end of a task, after its reattach
+    /// this flag helps us to propagate state out of a child task correctly
+    pub from_reattach: bool,
+}
+
+impl MaybeUninitializedPlacesDomain {
+    fn insert_all(&mut self) {
+        self.current.insert_all();
+        self.children.insert_all();
+    }
+
+    fn new_empty(domain_size: usize) -> Self {
+        Self {
+            current: MixedBitSet::new_empty(domain_size),
+            children: MixedBitSet::new_empty(domain_size),
+            from_reattach: false,
+        }
+    }
+}
+
+impl GenKill<MovePathIndex> for MaybeUninitializedPlacesDomain {
+    fn gen_(&mut self, elem: MovePathIndex) {
+        self.current.gen_(elem);
+        self.children.gen_(elem);
+    }
+    
+    fn kill(&mut self, elem: MovePathIndex) {
+        self.current.kill(elem);
+        self.children.kill(elem);
+    }
+}
+
+impl JoinSemiLattice for MaybeUninitializedPlacesDomain {
+    fn join(&mut self, other: &Self) -> bool {
+        if other.from_reattach {
+            // upon a reattach edge, unset any children bits that were initialized in the spawned task
+            // this change will propagate to .current when we reach a sync
+            self.children.intersect(&other.children)
+        } else {
+            self.current.join(&other.current) && self.children.join(&other.children)
+        }
+    }
+}
+
+impl BitSetExt<MovePathIndex> for MaybeUninitializedPlacesDomain {
+    fn contains(&self, elem: MovePathIndex) -> bool {
+        self.current.contains(elem)
+    }
+}
+
+// TODO: implement
+impl<C> DebugWithContext<C> for MaybeUninitializedPlacesDomain {}
 
 impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
     type Domain = MaybeUninitializedPlacesDomain;
@@ -504,7 +566,7 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
 
     fn bottom_value(&self, _: &mir::Body<'tcx>) -> Self::Domain {
         // bottom = initialized (`initialize_start_block` overwrites this on first entry)
-        MixedBitSet::new_empty(self.move_data().move_paths.len())
+        Self::Domain::new_empty(self.move_data().move_paths.len())
     }
 
     // sets state bits for Arg places
@@ -514,7 +576,7 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
 
         drop_flag_effects_for_function_entry(self.body, self.move_data, |path, s| {
             assert!(s == DropFlagState::Present);
-            state.remove(path);
+            state.kill(path);
         });
     }
 
@@ -541,13 +603,17 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {
             Self::update_bits(state, path, s)
         });
-        // For `Detach`, only propagate uninit state to the spawned task. The
-        // continuation is only reached via `Reattach`, at which point any places
-        // initialized in the spawned task are committed. Skipping the direct
-        // Detach→continuation edge avoids a spurious "possibly-uninitialized" join.
-        if let mir::TerminatorKind::Detach { spawned_task, continuation: _ } = terminator.kind {
-            return TerminatorEdges::Single(spawned_task);
+        match terminator.kind {
+            mir::TerminatorKind::Sync { .. } => {
+                // upon sync, propagate state from child tasks
+                state.current.clone_from(&state.children);
+            }
+            mir::TerminatorKind::Reattach { .. } => {
+                state.from_reattach = true;
+            }
+            _ => (),
         }
+
         if self.skip_unreachable_unwind.contains(location.block) {
             let mir::TerminatorKind::Drop { target, unwind, .. } = terminator.kind else { bug!() };
             assert_matches!(unwind, mir::UnwindAction::Cleanup(_));
