@@ -590,8 +590,10 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 block = self.expr_into_dest(place, block, initializer_id).into_block();
 
                 // Inject a fake read, see comments on `FakeReadCause::ForLet`.
-                let source_info = self.source_info(irrefutable_pat.span);
-                self.cfg.push_fake_read(block, source_info, FakeReadCause::ForLet(None), place);
+                // let source_info = self.source_info(irrefutable_pat.span);
+                // self.cfg.push_fake_read(block, source_info, FakeReadCause::ForLet(None), place);
+                // these lines are to prevent let bindings which create invalid variables
+                // statements like `let x = cilk_spawn` however are meant to do precisely this, so we disable the above
 
                 let ascriptions: &[_] =
                     try { irrefutable_pat.extra.as_deref()?.ascriptions.as_slice() }
