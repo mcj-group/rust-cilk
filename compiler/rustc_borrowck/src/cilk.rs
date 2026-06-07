@@ -26,7 +26,7 @@
 //!     supplied set of points.
 //!   * [`add_extension_constraint`]   — push the `'?b: '?c` outlives edge.
 
-use rustc_data_structures::fx::FxIndexSet;
+use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
 use rustc_data_structures::work_queue::WorkQueue;
 use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
@@ -144,9 +144,14 @@ pub(crate) fn continuation_points<'tcx>(
 
     let mut queue = WorkQueue::with_none(body.basic_blocks.len());
     queue.insert(continuation);
+    let mut visited = FxHashSet::default();
 
     let mut points = Vec::new();
     while let Some(bb) = queue.pop() {
+        if visited.contains(&bb) {
+            continue;
+        }
+        visited.insert(bb);
         let bb_data = &body.basic_blocks[bb];
         if bb_data.is_cleanup {
             continue;
