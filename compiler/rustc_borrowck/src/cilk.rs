@@ -111,10 +111,6 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
 /// The walk is a forward BFS in the parent's CFG starting at the block
 /// targeted by the `Reattach`, restricted to blocks whose [`Task`] is `task`'s
 /// parent. That restriction naturally:
-///   * skips over nested spawns' bodies (a nested task's blocks belong to a
-///     different `Task`), and
-///   * excludes the outer task's own blocks (they belong to `task`, not the
-///     parent).
 ///
 /// Boundary terminators include their containing block in the result but do
 /// not propagate to successors:
@@ -131,7 +127,6 @@ pub(crate) fn continuation_points<'tcx>(
     task_info: &TaskInfo,
     task: Task,
 ) -> Vec<Location> {
-    let parent = task_info.expect_parent_task(task);
     let reattach_loc = task_info.expect_last_location(task);
     let TerminatorKind::Reattach { continuation } =
         body.basic_blocks[reattach_loc.block].terminator().kind
@@ -154,9 +149,6 @@ pub(crate) fn continuation_points<'tcx>(
         visited.insert(bb);
         let bb_data = &body.basic_blocks[bb];
         if bb_data.is_cleanup {
-            continue;
-        }
-        if task_info.expect_task(bb) != parent {
             continue;
         }
 
