@@ -1967,7 +1967,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 pathsegs.push(PathSegment {
                     ident: induction_var_ident,
-                    id: ast_pathseg_id, // TODO: is this correct? I think this should be a new id because it is the id of the pathsegment, not of the pat?
+                    id: ast_pathseg_id,
                     args: None,
                 });
 
@@ -2010,7 +2010,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 self.resolver.partial_res_map.insert(shadow_path_id, shadow_res);
                 self.resolver.partial_res_map.insert(shadow_path_seg_id, shadow_res);
 
-                // create Local statement
+                // create Local statement for shadow
                 let shadow_local_stmt = self.stmt_let_pat(
                     None,
                     pat_span,
@@ -2019,18 +2019,74 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir::LocalSource::Normal, // idk if this is correct
                 );
 
+                // create NodeId and Ident for shadow_copy variable
+                let shadow_copy_node_id = self.next_node_id();
+                // prefix name with _ so that there's no warning if the induction variables is unused
+                let shadow_copy_ident = rustc_span::symbol::Ident::from_str("_shadow_copy");
+
+                let ast_pathseg_id = self.next_node_id();
+
+                self.resolver.partial_res_map.insert(ast_pathseg_id, shadow_res);
+                self.resolver.partial_res_map.insert(shadow_copy_node_id, shadow_res);
+
+                // create the init for shadow_copy (shadow_copy = shadow)
+                let mut shadow_copy_pathsegs = ThinVec::new();
+                shadow_copy_pathsegs.push(PathSegment {
+                    ident: shadow_ident,
+                    id: ast_pathseg_id,
+                    args: None,
+                });
+                let shadow_copy_init = Some(self.lower_expr(&ast::Expr {
+                    span: shadow_pat.span,
+                    attrs: ThinVec::new(),
+                    tokens: None,
+                    id: shadow_copy_node_id,
+                    kind: ExprKind::Path(
+                        None,
+                        ast::Path {
+                            span: shadow_pat.span,
+                            tokens: None,
+                            segments: shadow_copy_pathsegs,
+                        },
+                    ),
+                }));
+
+                // create Pat for shadow_copy variable
+                let shadow_copy_pat_id = self.next_node_id();
+                let shadow_copy_pat = self.lower_pat(&ast::Pat {
+                    id: shadow_copy_pat_id,
+                    kind: PatKind::Ident(
+                        ast::BindingMode(ByRef::No, Mutability::Not),
+                        shadow_copy_ident,
+                        None,
+                    ),
+                    span: shadow_pat.span,
+                    tokens: None,
+                });
+
+                let shadow_copy_res = rustc_hir::def::PartialRes::new(Res::Local(shadow_copy_pat_id));
+
+                // create Local statement for shadow_copy
+                let shadow_copy_local_stmt = self.stmt_let_pat(
+                    None,
+                    pat_span,
+                    shadow_copy_init,
+                    shadow_copy_pat,
+                    hir::LocalSource::Normal,
+                );
+
                 let mut body_clone: Box<Block> = body.clone();
                 let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
                 let mut var_visitor = ReplaceVariable {
                     target_ident: induction_var_ident,
-                    new_ident: shadow_ident,
+                    new_ident: shadow_copy_ident,
                     map_targets: &mut map_targets,
                 };
                 // visit body block
                 var_visitor.visit_block(&mut body_clone);
                 for node_id in &map_targets {
-                    self.resolver.partial_res_map.insert(*node_id, shadow_res);
+                    self.resolver.partial_res_map.insert(*node_id, shadow_copy_res);
                 }
 
                 let dcx = self.dcx();
@@ -2039,9 +2095,16 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 let body_block =
                     self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
-                // let body_block = self.lower_block(&*body_clone, false);
+                // Place shadow_copy_local_stmt right before body_block in the spawned block.
+                let spawned_stmts = self.arena.alloc_from_iter(
+                    std::iter::once(shadow_copy_local_stmt).chain(body_block.stmts.iter().copied())
+                );
+                let spawn_block = self.arena.alloc(hir::Block {
+                    stmts: spawned_stmts,
+                    ..*body_block
+                });
                 // Wrap the body in a cilk_spawn
-                let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(body_block);
+                let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(spawn_block);
                 let spawn_expr = self.arena.alloc(spawn_expr_val);
                 let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
                 let stmts_slice = self.arena.alloc_from_iter([shadow_local_stmt, spawn_stmt]);
