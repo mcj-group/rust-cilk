@@ -71,11 +71,13 @@ pub(super) fn generate<'tcx>(
     // continuation up through the matching cilk_sync. This adds the
     // `'?b: '?c` constraints region inference needs to detect conflicts
     // between a spawned task and its parent's continuation.
+    let tcx = typeck.tcx();
     crate::cilk::extend_cilk_borrow_lifetimes(
         typeck.body,
         typeck.infcx,
         &mut typeck.constraints,
         typeck.borrow_set,
+        tcx,
     );
 }
 

@@ -28,11 +28,13 @@
 
 use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
 use rustc_data_structures::work_queue::WorkQueue;
+use rustc_hir::attrs::OrphaningAttr;
 use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
-use rustc_middle::mir::{Body, ConstraintCategory, Local, Location, TerminatorKind};
-use rustc_middle::ty::RegionVid;
+use rustc_middle::mir::{BasicBlock, Body, ConstraintCategory, Local, Location, TerminatorKind};
+use rustc_middle::mir::BorrowKind;
+use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
 use rustc_span::Span;
 
@@ -49,6 +51,48 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
     body.basic_blocks
         .iter()
         .any(|bb_data| matches!(bb_data.terminator().kind, TerminatorKind::Detach { .. }))
+}
+
+/// Returns the set of [`BasicBlock`]s whose terminator is a [`TerminatorKind::Call`]
+/// to an orphaning closure — a closure bearing `#[orphaning]` synthesized during
+/// `cilk_spawn` lowering to wrap the spawn body.
+///
+/// Calling a closure does not produce a `Call` to the closure's own `DefId`.
+/// THIR lowering rewrites `closure()` into a call to the `Fn`/`FnMut`/`FnOnce`
+/// trait method (`<{closure} as Fn>::call(&closure, ())`), so the callee in the
+/// MIR is the *trait method* `FnDef`, whose `DefId` carries no `#[orphaning]`
+/// attribute. The closure itself appears as the receiver: the trait-method
+/// `FnDef`'s first generic argument is the closure's `Self` type. We recover
+/// that type, pull out the closure's `DefId`, and check *its* [`OrphaningAttr`].
+fn blocks_calling_orphaning_closure<'tcx>(
+    body: &Body<'tcx>,
+    tcx: TyCtxt<'tcx>,
+) -> FxIndexSet<(BasicBlock, BasicBlock)> {
+    let mut result = FxIndexSet::default();
+    for (bb, bb_data) in body.basic_blocks.iter_enumerated() {
+        let TerminatorKind::Call { ref func, target: Some(successor), .. } = bb_data.terminator().kind else {
+            continue;
+        };
+        let func_ty = func.ty(&body.local_decls, tcx);
+        let ty::FnDef(fun_id, generic_args) = *func_ty.kind() else {
+            continue;
+        };
+        // The callee must be one of the `Fn`/`FnMut`/`FnOnce` trait methods.
+        let Some(trait_id) = tcx.trait_of_assoc(fun_id) else {
+            continue;
+        };
+        if tcx.fn_trait_kind_from_def_id(trait_id).is_none() {
+            continue;
+        }
+        // The receiver (the `Self` type of the `Fn`-family trait) is the closure.
+        let ty::Closure(closure_id, _) = *generic_args.type_at(0).peel_refs().kind() else {
+            continue;
+        };
+        if tcx.codegen_fn_attrs(closure_id).orphaning == OrphaningAttr::Hint {
+            result.insert((bb, successor));
+        }
+    }
+    result
 }
 
 /// Apply cilk lifetime extension to every child task in `body`.
@@ -76,17 +120,20 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
     infcx: &BorrowckInferCtxt<'tcx>,
     constraints: &mut MirTypeckRegionConstraints<'tcx>,
     borrow_set: &BorrowSet<'tcx>,
+    tcx: TyCtxt<'tcx>,
 ) {
-    // Fast path: skip everything for bodies without cilk constructs.
-    // `TaskInfo`'s spindle propagation across plain CFG joins (e.g. SwitchInt
-    // → Goto → join) is incomplete and would assert-fail on non-cilk bodies.
-    if !body_has_cilk_tasks(body) {
-        return;
-    }
-
     let task_info = TaskInfo::from_body(body);
     for task in task_info.child_tasks() {
-        let points = continuation_points(body, &task_info, task);
+        let reattach_loc = task_info.expect_last_location(task);
+        let TerminatorKind::Reattach { continuation } =
+            body.basic_blocks[reattach_loc.block].terminator().kind
+        else {
+            bug!(
+                "expected last_location of task {task:?} to terminate with Reattach, found {:?}",
+                body.basic_blocks[reattach_loc.block].terminator().kind,
+            );
+        };
+        let points = continuation_points(body, continuation);
         if points.is_empty() {
             continue;
         }
@@ -94,8 +141,32 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
         if regions.is_empty() {
             continue;
         }
-        let reattach_loc = task_info.expect_last_location(task);
         let span = body.basic_blocks[reattach_loc.block].terminator().source_info.span;
+        let c_region = create_continuation_region(infcx, constraints, points);
+        for b_region in regions {
+            add_extension_constraint(constraints, b_region, c_region, span);
+        }
+    }
+
+    for (orphaning_call_block, successor) in blocks_calling_orphaning_closure(body, tcx) {
+        let points = continuation_points(body, successor);
+        if points.is_empty() {
+            continue;
+        }
+        let mut regions = FxIndexSet::default();
+        for (_, bw) in borrow_set.location_map.iter() {
+            if bw.reserve_location.block == orphaning_call_block && let BorrowKind::Mut { .. } = bw.kind {
+                regions.insert(bw.region);
+                for i in 0..body.basic_blocks[orphaning_call_block].statements.len() {
+                    let live = constraints.liveness_constraints.is_live_at(bw.region, Location { block: orphaning_call_block, statement_index: i});
+                    println!("{i} {live}");
+                }
+            }
+        }
+        if regions.is_empty() {
+            continue;
+        }
+        let span = body.basic_blocks[orphaning_call_block].terminator().source_info.span;
         let c_region = create_continuation_region(infcx, constraints, points);
         for b_region in regions {
             add_extension_constraint(constraints, b_region, c_region, span);
@@ -124,21 +195,10 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
 /// filtered out before the parent-task check.
 pub(crate) fn continuation_points<'tcx>(
     body: &Body<'tcx>,
-    task_info: &TaskInfo,
-    task: Task,
+    start_block: BasicBlock,
 ) -> Vec<Location> {
-    let reattach_loc = task_info.expect_last_location(task);
-    let TerminatorKind::Reattach { continuation } =
-        body.basic_blocks[reattach_loc.block].terminator().kind
-    else {
-        bug!(
-            "expected last_location of task {task:?} to terminate with Reattach, found {:?}",
-            body.basic_blocks[reattach_loc.block].terminator().kind,
-        );
-    };
-
     let mut queue = WorkQueue::with_none(body.basic_blocks.len());
-    queue.insert(continuation);
+    queue.insert(start_block);
     let mut visited = FxHashSet::default();
 
     let mut points = Vec::new();
@@ -175,7 +235,7 @@ pub(crate) fn continuation_points<'tcx>(
 }
 
 /// Enumerate the borrow regions that need to outlive `task`'s continuation
-/// region.
+/// terminator.
 ///
 /// A borrow is extended if and only if both:
 ///   1. It is issued in `task` (i.e., `bw.reserve_location.block ∈ task`).
