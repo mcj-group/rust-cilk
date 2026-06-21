@@ -699,7 +699,7 @@ rustc_index::newtype_index! {
     #[orderable]
     #[debug_format = "sr{}"]
     /// Every detach reattach and sync is tagged with a sync region
-    /// 
+    ///
     /// a sync only syncs tasks in the same sync region
     pub struct SyncRegion {}
 }

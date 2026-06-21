@@ -567,7 +567,9 @@ mod helper {
                 | Assert { target: ref t, unwind: _, .. }
                 | FalseUnwind { real_target: ref t, unwind: _ }
                 | Reattach { continuation: ref t, .. }
-                | Sync { sync_region: _, target: ref t } => mk_successors(slice::from_ref(t), None, None),
+                | Sync { sync_region: _, target: ref t } => {
+                    mk_successors(slice::from_ref(t), None, None)
+                }
                 // No successors
                 UnwindResume
                 | UnwindTerminate(_)

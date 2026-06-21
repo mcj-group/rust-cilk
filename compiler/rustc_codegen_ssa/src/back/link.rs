@@ -1310,7 +1310,6 @@ fn find_cxx_abi() -> PathBuf {
     PathBuf::from(dir)
 }
 
-
 fn add_opencilk_runtime(sess: &Session, linker: &mut dyn Linker) {
     // This implementation fixes a bug where linking with -static failed since originally, the OpenCilk
     // runtime was always dynamically linked. On GNU Linux, -static forces all libraries to be linked

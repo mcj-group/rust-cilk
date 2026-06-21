@@ -2064,7 +2064,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     tokens: None,
                 });
 
-                let shadow_copy_res = rustc_hir::def::PartialRes::new(Res::Local(shadow_copy_pat_id));
+                let shadow_copy_res =
+                    rustc_hir::def::PartialRes::new(Res::Local(shadow_copy_pat_id));
 
                 // create Local statement for shadow_copy
                 let shadow_copy_local_stmt = self.stmt_let_pat(
@@ -2097,12 +2098,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
                 // Place shadow_copy_local_stmt right before body_block in the spawned block.
                 let spawned_stmts = self.arena.alloc_from_iter(
-                    std::iter::once(shadow_copy_local_stmt).chain(body_block.stmts.iter().copied())
+                    std::iter::once(shadow_copy_local_stmt).chain(body_block.stmts.iter().copied()),
                 );
-                let spawn_block = self.arena.alloc(hir::Block {
-                    stmts: spawned_stmts,
-                    ..*body_block
-                });
+                let spawn_block =
+                    self.arena.alloc(hir::Block { stmts: spawned_stmts, ..*body_block });
                 // Wrap the body in a cilk_spawn
                 let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(spawn_block);
                 let spawn_expr = self.arena.alloc(spawn_expr_val);
@@ -2315,22 +2314,21 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     arena_vec![self; iter_arm],
                     hir::MatchSource::ForLoopDesugar,
                 ))
-            }
-            // Note Parisa: not sure why we has a seperate case for cilk_for
-            // things started working correctly when I made cilk_fors use the regular
-            // for match arm
-            // can probably delete this
-            // ForLoopKind::CilkFor => {
-            //     // FIXME(jhilton): this should call something for converting to a random-access iterator
-            //     // or otherwise semantically check that the expression is a random-access iterator (or
-            //     // only work on ranges for now).
-            //     // `::std::iter::IntoIterator::into_iter(<head>)`
-            //     self.expr_call_lang_item_fn(
-            //         head_span,
-            //         hir::LangItem::IntoIterIntoIter,
-            //         arena_vec![self; head],
-            //     )
-            // }
+            } // Note Parisa: not sure why we has a seperate case for cilk_for
+              // things started working correctly when I made cilk_fors use the regular
+              // for match arm
+              // can probably delete this
+              // ForLoopKind::CilkFor => {
+              //     // FIXME(jhilton): this should call something for converting to a random-access iterator
+              //     // or otherwise semantically check that the expression is a random-access iterator (or
+              //     // only work on ranges for now).
+              //     // `::std::iter::IntoIterator::into_iter(<head>)`
+              //     self.expr_call_lang_item_fn(
+              //         head_span,
+              //         hir::LangItem::IntoIterIntoIter,
+              //         arena_vec![self; head],
+              //     )
+              // }
         };
 
         // This is effectively `{ let _result = ...; _result }`.

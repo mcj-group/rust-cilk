@@ -16,7 +16,9 @@ use crate::fmt::DebugWithContext;
 use crate::framework::BitSetExt;
 use crate::move_paths::{HasMoveData, InitIndex, InitKind, LookupResult, MoveData, MovePathIndex};
 use crate::{
-    Analysis, GenKill, JoinSemiLattice, MaybeReachable, drop_flag_effects, drop_flag_effects_for_function_entry, drop_flag_effects_for_location, on_all_children_bits, on_lookup_result_bits
+    Analysis, GenKill, JoinSemiLattice, MaybeReachable, drop_flag_effects,
+    drop_flag_effects_for_function_entry, drop_flag_effects_for_location, on_all_children_bits,
+    on_lookup_result_bits,
 };
 
 // Used by both `MaybeInitializedPlaces` and `MaybeUninitializedPlaces`.
@@ -426,7 +428,7 @@ impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
         // The continuation is only reached via `Reattach`, at which point any places
         // initialized in the spawned task are committed. Skipping the direct
         // Detach→continuation edge avoids a spurious "possibly-uninitialized" join.
-        if let mir::TerminatorKind::Detach { spawned_task, ..} = terminator.kind {
+        if let mir::TerminatorKind::Detach { spawned_task, .. } = terminator.kind {
             edges = TerminatorEdges::Single(spawned_task);
         }
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {
@@ -529,7 +531,7 @@ impl GenKill<MovePathIndex> for MaybeUninitializedPlacesDomain {
         self.current.gen_(elem);
         self.children.gen_(elem);
     }
-    
+
     fn kill(&mut self, elem: MovePathIndex) {
         self.current.kill(elem);
         self.children.kill(elem);

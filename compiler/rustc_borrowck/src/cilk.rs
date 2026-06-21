@@ -32,18 +32,18 @@ use rustc_hir::attrs::OrphaningAttr;
 use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
-use rustc_middle::mir::{BasicBlock, Body, ConstraintCategory, Local, Location, TerminatorKind};
-use rustc_middle::mir::BorrowKind;
+use rustc_middle::mir::{
+    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, Location, TerminatorKind,
+};
 use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
 use rustc_span::Span;
 
 use crate::borrow_set::BorrowSet;
 use crate::constraints::OutlivesConstraint;
-use crate::def_use;
 use crate::renumber::RegionCtxt;
 use crate::type_check::{Locations, MirTypeckRegionConstraints};
-use crate::BorrowckInferCtxt;
+use crate::{BorrowckInferCtxt, def_use};
 
 /// Returns `true` if `body` contains any cilk_spawn (i.e., any `Detach`
 /// terminator). Used to fast-path past the cilk machinery for ordinary code.
@@ -70,7 +70,9 @@ fn blocks_calling_orphaning_closure<'tcx>(
 ) -> FxIndexSet<(BasicBlock, BasicBlock)> {
     let mut result = FxIndexSet::default();
     for (bb, bb_data) in body.basic_blocks.iter_enumerated() {
-        let TerminatorKind::Call { ref func, target: Some(successor), .. } = bb_data.terminator().kind else {
+        let TerminatorKind::Call { ref func, target: Some(successor), .. } =
+            bb_data.terminator().kind
+        else {
             continue;
         };
         let func_ty = func.ty(&body.local_decls, tcx);
@@ -155,10 +157,15 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
         }
         let mut regions = FxIndexSet::default();
         for (_, bw) in borrow_set.location_map.iter() {
-            if bw.reserve_location.block == orphaning_call_block && let BorrowKind::Mut { .. } = bw.kind {
+            if bw.reserve_location.block == orphaning_call_block
+                && let BorrowKind::Mut { .. } = bw.kind
+            {
                 regions.insert(bw.region);
                 for i in 0..body.basic_blocks[orphaning_call_block].statements.len() {
-                    let live = constraints.liveness_constraints.is_live_at(bw.region, Location { block: orphaning_call_block, statement_index: i});
+                    let live = constraints.liveness_constraints.is_live_at(
+                        bw.region,
+                        Location { block: orphaning_call_block, statement_index: i },
+                    );
                     println!("{i} {live}");
                 }
             }
@@ -327,10 +334,9 @@ pub(crate) fn create_continuation_region<'tcx>(
     points: impl IntoIterator<Item = Location>,
 ) -> RegionVid {
     let region = infcx
-        .next_nll_region_var(
-            NllRegionVariableOrigin::Existential { name: None },
-            || RegionCtxt::Existential(None),
-        )
+        .next_nll_region_var(NllRegionVariableOrigin::Existential { name: None }, || {
+            RegionCtxt::Existential(None)
+        })
         .as_var();
     for loc in points {
         constraints.liveness_constraints.add_location(region, loc);

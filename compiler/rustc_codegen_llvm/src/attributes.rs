@@ -103,10 +103,7 @@ fn patchable_function_entry_attrs<'ll>(
     attrs
 }
 
-fn orphaning_attr<'ll>(
-    cx: &SimpleCx<'ll>,
-    orphaning: OrphaningAttr,
-) -> Option<&'ll Attribute> {
+fn orphaning_attr<'ll>(cx: &SimpleCx<'ll>, orphaning: OrphaningAttr) -> Option<&'ll Attribute> {
     match orphaning {
         OrphaningAttr::Hint => Some(AttributeKind::Orphaning.create_attr(cx.llcx)),
         OrphaningAttr::None => None,

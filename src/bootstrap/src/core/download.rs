@@ -378,14 +378,9 @@ impl Config {
     // unpack the tarballs.
 
     pub(crate) fn maybe_download_opencilk_runtime(&self) {
-        let url =
-            "https://github.com/OpenCilk/cheetah/archive/refs/tags/opencilk/v3.0.tar.gz";
+        let url = "https://github.com/OpenCilk/cheetah/archive/refs/tags/opencilk/v3.0.tar.gz";
         let destination = Path::new("src/llvm-project/cheetah");
-        self.maybe_download_opencilk_component(
-            url,
-            destination,
-            "cheetah-opencilk-v3.0",
-        );
+        self.maybe_download_opencilk_component(url, destination, "cheetah-opencilk-v3.0");
     }
 
     pub(crate) fn maybe_download_cilktools(&self) {

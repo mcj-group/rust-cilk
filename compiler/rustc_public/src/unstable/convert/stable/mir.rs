@@ -733,10 +733,12 @@ impl<'tcx> Stable<'tcx> for mir::TerminatorKind<'tcx> {
             mir::TerminatorKind::UnwindResume => TerminatorKind::Resume,
             mir::TerminatorKind::UnwindTerminate(_) => TerminatorKind::Abort,
             mir::TerminatorKind::Return => TerminatorKind::Return,
-            mir::TerminatorKind::Detach { sync_region: _, spawned_task, continuation } => TerminatorKind::Detach {
-                spawned_task: spawned_task.as_usize(),
-                continuation: continuation.as_usize(),
-            },
+            mir::TerminatorKind::Detach { sync_region: _, spawned_task, continuation } => {
+                TerminatorKind::Detach {
+                    spawned_task: spawned_task.as_usize(),
+                    continuation: continuation.as_usize(),
+                }
+            }
             mir::TerminatorKind::Reattach { sync_region: _, continuation } => {
                 TerminatorKind::Reattach { continuation: continuation.as_usize() }
             }

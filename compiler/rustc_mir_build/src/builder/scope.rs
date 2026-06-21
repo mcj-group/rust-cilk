@@ -538,7 +538,7 @@ impl<'tcx> Scopes<'tcx> {
         }
         let sync_region = SyncRegion::from_u32(self.next_sync_region);
         self.sync_regions.push(sync_region);
-        
+
         // We track whether or not the sync region gets used
         // if it doesn't, reuse its index
         // this will be the case for tasks with no children

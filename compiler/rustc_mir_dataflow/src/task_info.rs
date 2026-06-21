@@ -2,14 +2,14 @@
 // module is preserved as authored upstream; allow rather than mutate it.
 #![allow(unreachable_pub)]
 
+use itertools::Itertools;
+use rustc_data_structures::fx::{FxHashMap, FxIndexSet};
+use rustc_data_structures::sync::HashMapExt;
 use rustc_data_structures::work_queue::WorkQueue;
-use rustc_data_structures::{fx::FxHashMap, fx::FxIndexSet, sync::HashMapExt};
-use rustc_index::IndexSlice;
-use rustc_index::{bit_set::DenseBitSet, IndexVec};
+use rustc_index::bit_set::DenseBitSet;
+use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::mir::{self, BasicBlock, Location};
 use smallvec::SmallVec;
-
-use itertools::Itertools;
 
 use crate::fmt::DebugWithContext;
 
@@ -291,13 +291,11 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
                     builder.label_block_task(*target, current_task);
                 }
 
-                _ => {
-                    terminator.successors().for_each(|t| {
-                        if !builder.cleanup_blocks.contains(t) {
-                            builder.label_block_task(t, current_task);
-                        }
-                    })
-                }
+                _ => terminator.successors().for_each(|t| {
+                    if !builder.cleanup_blocks.contains(t) {
+                        builder.label_block_task(t, current_task);
+                    }
+                }),
             }
         }
 
@@ -312,7 +310,7 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
                 }
 
                 let current_task = builder.block_tasks[&block];
-                
+
                 if let Some(&current_spindle) = builder.block_spindles.get(&block) {
                     if builder.spindles[current_spindle].entry == block {
                         continue;
@@ -320,16 +318,19 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
                 }
 
                 let block_predecessor = &predecessors[block];
-                
+
                 if block_predecessor.is_empty() {
                     builder.associate_new_spindle(block, current_task);
                     updating = true;
                     continue;
                 }
 
-                let mut predecessor_terminators = block_predecessor.iter().map(|b| body.basic_blocks[*b].terminator());
+                let mut predecessor_terminators =
+                    block_predecessor.iter().map(|b| body.basic_blocks[*b].terminator());
                 if predecessor_terminators.any(|t| match t.kind {
-                    mir::TerminatorKind::Detach { .. } | mir::TerminatorKind::Reattach { .. } | mir::TerminatorKind::Sync { .. } => true,
+                    mir::TerminatorKind::Detach { .. }
+                    | mir::TerminatorKind::Reattach { .. }
+                    | mir::TerminatorKind::Sync { .. } => true,
                     _ => false,
                 }) {
                     builder.associate_new_spindle(block, current_task);
@@ -337,18 +338,21 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
                     continue;
                 }
 
-                let predecessor_spindles = block_predecessor.iter().filter_map(|b| builder.block_spindles.get(b)).collect::<FxIndexSet<_>>();
+                let predecessor_spindles = block_predecessor
+                    .iter()
+                    .filter_map(|b| builder.block_spindles.get(b))
+                    .collect::<FxIndexSet<_>>();
                 match predecessor_spindles.iter().exactly_one() {
                     Ok(&&spindle) => {
                         if builder.block_spindles.get(&block) != Some(&spindle) {
                             builder.label_block_spindle(block, spindle);
                             updating = true;
                         }
-                    },
+                    }
                     Err(_) => {
                         builder.associate_new_spindle(block, current_task);
                         updating = true;
-                    },
+                    }
                 }
             }
         }

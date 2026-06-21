@@ -1362,7 +1362,11 @@ impl<'tcx> MutVisitor<'tcx> for Integrator<'_, 'tcx> {
                 }
                 *unwind = self.map_unwind(*unwind);
             }
-            TerminatorKind::Detach { sync_region: _, ref mut spawned_task, ref mut continuation } => {
+            TerminatorKind::Detach {
+                sync_region: _,
+                ref mut spawned_task,
+                ref mut continuation,
+            } => {
                 *spawned_task = self.map_block(*spawned_task);
                 *continuation = self.map_block(*continuation);
             }

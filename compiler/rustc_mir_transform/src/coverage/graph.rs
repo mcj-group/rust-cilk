@@ -399,7 +399,8 @@ fn bcb_filtered_successors<'a, 'tcx>(terminator: &'a Terminator<'tcx>) -> Covera
         // Reattach and Sync have a single successor; Detach has two targets stored
         // separately, so we return only the continuation as the coverage-relevant
         // successor (the spawned task's coverage is tracked via its own BCB).
-        Reattach { sync_region: _, continuation } | Sync { sync_region: _, target: continuation } => {
+        Reattach { sync_region: _, continuation }
+        | Sync { sync_region: _, target: continuation } => {
             is_not_chainable = true;
             slice::from_ref(continuation)
         }
