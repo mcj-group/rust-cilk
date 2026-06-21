@@ -693,6 +693,17 @@ pub enum InlineAsmMacro {
     NakedAsm,
 }
 
+rustc_index::newtype_index! {
+    #[derive(HashStable)]
+    #[encodable]
+    #[orderable]
+    #[debug_format = "sr{}"]
+    /// Every detach reattach and sync is tagged with a sync region
+    /// 
+    /// a sync only syncs tasks in the same sync region
+    pub struct SyncRegion {}
+}
+
 ///////////////////////////////////////////////////////////////////////////
 // Terminators
 
@@ -1015,7 +1026,7 @@ pub enum TerminatorKind<'tcx> {
     /// Represents an opportunity for logical parallelism: the spawned task and continuation can
     /// run in parallel. Convention: the spawned task is "to the left", so it should be listed
     /// first.
-    Detach { spawned_task: BasicBlock, continuation: BasicBlock },
+    Detach { sync_region: SyncRegion, spawned_task: BasicBlock, continuation: BasicBlock },
 
     /// For a spawned task, allows to resume and execute the original continuation. Cilk is
     /// continuation-stealing so the spawned task will immediately execute, but this should not change
@@ -1023,12 +1034,12 @@ pub enum TerminatorKind<'tcx> {
     // NOTE(jhilton): when we codegen a reattach, we make sure that the assignment happens before the terminator,
     // so we shouldn't need to make the edges of some type that expresses that we're going to assign. This simplifies
     // generating LLVM IR so that we don't have to duplicate the code of an assignment.
-    Reattach { continuation: BasicBlock },
+    Reattach { sync_region: SyncRegion, continuation: BasicBlock },
 
     /// Marks a basic block terminated by a cilk_sync, which waits for spawned tasks to complete.
     /// Representing Sync as a terminator means that we can assume any block after a sync which is not
     /// after a spawn is completely serial, which is easier to conclude than if Sync was a statement.
-    Sync { target: BasicBlock },
+    Sync { sync_region: SyncRegion, target: BasicBlock },
 }
 
 #[derive(

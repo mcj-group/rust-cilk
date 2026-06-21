@@ -119,6 +119,10 @@ pub(crate) struct Scopes<'tcx> {
     // TODO: make private?
     pub reattach_targets: Vec<BasicBlock>,
 
+    sync_regions: Vec<SyncRegion>,
+    next_sync_region: u32,
+    sync_region_used: bool,
+
     /// Drops that need to be done on unwind paths. See the comment on
     /// [DropTree] for more details.
     unwind_drops: DropTree,
@@ -489,6 +493,9 @@ impl<'tcx> Scopes<'tcx> {
             const_continuable_scopes: Vec::new(),
             if_then_scope: None,
             reattach_targets: Vec::new(),
+            sync_regions: Vec::new(),
+            next_sync_region: 0,
+            sync_region_used: true,
             unwind_drops: DropTree::new(),
             coroutine_drops: DropTree::new(),
         }
@@ -523,6 +530,32 @@ impl<'tcx> Scopes<'tcx> {
     /// the next scope expression.
     fn topmost(&self) -> region::Scope {
         self.scopes.last().expect("topmost_scope: no scopes present").region_scope
+    }
+
+    pub(crate) fn enter_sync_region(&mut self) {
+        if !self.sync_region_used {
+            self.next_sync_region += 1;
+        }
+        let sync_region = SyncRegion::from_u32(self.next_sync_region);
+        self.sync_regions.push(sync_region);
+        
+        // We track whether or not the sync region gets used
+        // if it doesn't, reuse its index
+        // this will be the case for tasks with no children
+        self.sync_region_used = false;
+    }
+
+    pub(crate) fn current_sync_region(&mut self) -> SyncRegion {
+        if !self.sync_region_used {
+            self.sync_region_used = true;
+            self.next_sync_region += 1;
+        }
+        *self.sync_regions.last().expect("no usable sync regions")
+    }
+
+    pub(crate) fn exit_sync_region(&mut self) {
+        self.sync_regions.pop();
+        self.sync_region_used = true;
     }
 }
 
@@ -2204,9 +2237,9 @@ impl<'tcx> DropTreeBuilder<'tcx> for Unwind {
             // NOTE(jhilton): if we add proper unwinding semantics for spawned tasks, this will
             //  probably have to change. You'll get a compile error!
             // Also, Call doesn't do anything special with its destination so we don't either.
-            | TerminatorKind::Detach { spawned_task: _, continuation: _ }
-            | TerminatorKind::Reattach { continuation: _ }
-            | TerminatorKind::Sync { target: _ } => {
+            | TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => {
                 span_bug!(term.source_info.span, "cannot unwind from {:?}", term.kind)
             }
         }

@@ -567,7 +567,7 @@ mod helper {
                 | Assert { target: ref t, unwind: _, .. }
                 | FalseUnwind { real_target: ref t, unwind: _ }
                 | Reattach { continuation: ref t, .. }
-                | Sync { target: ref t } => mk_successors(slice::from_ref(t), None, None),
+                | Sync { sync_region: _, target: ref t } => mk_successors(slice::from_ref(t), None, None),
                 // No successors
                 UnwindResume
                 | UnwindTerminate(_)
@@ -586,7 +586,7 @@ mod helper {
                 FalseEdge { ref real_target, imaginary_target } => {
                     mk_successors(slice::from_ref(real_target), Some(imaginary_target), None)
                 }
-                Detach { spawned_task: ref task, continuation: cont } => {
+                Detach { sync_region: _, spawned_task: ref task, continuation: cont } => {
                     mk_successors(slice::from_ref(task), Some(cont), None)
                 }
             }
@@ -625,14 +625,14 @@ mod helper {
                         f(u)
                     }
                 }
-                Detach { spawned_task, continuation } => {
+                Detach { sync_region: _, spawned_task, continuation } => {
                     f(spawned_task);
                     f(continuation);
                 }
-                Reattach { continuation } => {
+                Reattach { sync_region: _, continuation } => {
                     f(continuation);
                 }
-                Goto { target } | Sync { target } => {
+                Goto { target } | Sync { sync_region: _, target } => {
                     f(target);
                 }
                 UnwindResume
@@ -678,9 +678,9 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::SwitchInt { .. }
             | TerminatorKind::FalseEdge { .. }
             // NOTE(jhilton): if unwind behavior changes for spawned tasks, change this code :)
-            | TerminatorKind::Detach { spawned_task: _, continuation: _ }
-            | TerminatorKind::Reattach { continuation: _ }
-            | TerminatorKind::Sync { target: _ } => None,
+            | TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => None,
             TerminatorKind::Call { ref unwind, .. }
             | TerminatorKind::Assert { ref unwind, .. }
             | TerminatorKind::Drop { ref unwind, .. }
@@ -703,9 +703,9 @@ impl<'tcx> TerminatorKind<'tcx> {
             | TerminatorKind::SwitchInt { .. }
             | TerminatorKind::FalseEdge { .. }
             // NOTE(jhilton): if unwind behavior changes for spawned tasks, change this code :)
-            | TerminatorKind::Detach { spawned_task: _, continuation: _ }
-            | TerminatorKind::Reattach { continuation: _ }
-            | TerminatorKind::Sync { target: _ } => None,
+            | TerminatorKind::Detach { .. }
+            | TerminatorKind::Reattach { .. }
+            | TerminatorKind::Sync { .. } => None,
             TerminatorKind::Call { ref mut unwind, .. }
             | TerminatorKind::Assert { ref mut unwind, .. }
             | TerminatorKind::Drop { ref mut unwind, .. }
@@ -850,16 +850,16 @@ impl<'tcx> TerminatorKind<'tcx> {
 
             SwitchInt { ref targets, ref discr } => TerminatorEdges::SwitchInt { targets, discr },
 
-            Detach { spawned_task, continuation } => {
+            Detach { sync_region: _, spawned_task, continuation } => {
                 TerminatorEdges::Double(spawned_task, continuation)
             }
 
             // NOTE(jhilton): when we codegen a reattach, we make sure that the assignment happens before the terminator,
             // so we shouldn't need to make the edges of some type that expresses that we're going to assign. This simplifies
             // generating LLVM IR so that we don't have to duplicate the code of an assignment.
-            Reattach { continuation } => TerminatorEdges::Single(continuation),
+            Reattach { sync_region: _, continuation } => TerminatorEdges::Single(continuation),
 
-            Sync { target } => TerminatorEdges::Single(target),
+            Sync { sync_region: _, target } => TerminatorEdges::Single(target),
         }
     }
 }

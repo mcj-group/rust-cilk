@@ -2,7 +2,7 @@
 /// This pass inserts a sync before every return terminator in a function that contains a detach.
 /// We need this to have the correct behavior: we need to make sure that functions with detaches
 /// always end with only a single task.
-use rustc_middle::mir::{self, BasicBlockData};
+use rustc_middle::mir::{self, BasicBlockData, SyncRegion};
 use rustc_middle::ty::TyCtxt;
 use tracing::trace;
 
@@ -53,7 +53,7 @@ impl<'tcx> crate::MirPass<'tcx> for InsertSyncs {
                 let target = new_blocks.as_mut().push(return_block);
                 let new_bb_data =
                     new_blocks.as_mut().get_mut(bb).expect("block should exist in cloned blocks!");
-                new_bb_data.terminator_mut().kind = mir::TerminatorKind::Sync { target };
+                new_bb_data.terminator_mut().kind = mir::TerminatorKind::Sync { sync_region: SyncRegion::from_u32(0), target };
             }
         });
 

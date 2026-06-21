@@ -277,7 +277,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     this.cfg.terminate(
                         block,
                         source_info,
-                        TerminatorKind::Sync { target: next_block },
+                        TerminatorKind::Sync { sync_region: this.scopes.current_sync_region(), target: next_block },
                     );
                     next_block.unit()
                 } else {
@@ -902,8 +902,10 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 this.cfg.terminate(
                     block,
                     source_info,
-                    TerminatorKind::Detach { spawned_task, continuation },
+                    TerminatorKind::Detach { sync_region: this.scopes.current_sync_region(), spawned_task, continuation },
                 );
+
+                this.scopes.enter_sync_region();
 
                 this.scopes.reattach_targets.push(reattach_block);
                 let spawned_result =
@@ -917,10 +919,11 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let task_source_info = this.source_info(task_span);
                 this.cfg.goto(spawned_task, task_source_info, reattach_block);
                 // TODO: not sure what to put here for source_info
+                this.scopes.exit_sync_region();
                 this.cfg.terminate(
                     reattach_block,
                     task_source_info,
-                    TerminatorKind::Reattach { continuation },
+                    TerminatorKind::Reattach { sync_region: this.scopes.current_sync_region(), continuation },
                 );
 
                 block = continuation;
@@ -928,6 +931,8 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
 
             ExprKind::CilkScope { block: ast_block } => {
+                this.scopes.enter_sync_region();
+
                 // Give a hint to start the runtime at the beginning of the scope.
                 let start_runtime_kind =
                     StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TapirRuntimeStart));
@@ -937,7 +942,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // Generate the code for the block and end it in a sync.
                 unpack!(block = this.ast_block(destination, block, ast_block, source_info));
                 let next_block = this.cfg.start_new_block();
-                this.cfg.terminate(block, source_info, TerminatorKind::Sync { target: next_block });
+                this.cfg.terminate(block, source_info, TerminatorKind::Sync { sync_region: this.scopes.current_sync_region(), target: next_block });
                 block = next_block;
 
                 // Give a hint to stop the runtime at the end of the scope.
@@ -946,12 +951,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let end_runtime = Statement::new(source_info, end_runtime_kind);
                 this.cfg.push(block, end_runtime);
 
+                this.scopes.exit_sync_region();
+
                 block.unit()
             }
 
             ExprKind::CilkSync => {
                 let next_block = this.cfg.start_new_block();
-                this.cfg.terminate(block, source_info, TerminatorKind::Sync { target: next_block });
+                this.cfg.terminate(block, source_info, TerminatorKind::Sync { sync_region: this.scopes.current_sync_region(), target: next_block });
                 block = next_block;
                 block.unit()
             }

@@ -305,9 +305,9 @@ pub(crate) fn cleanup_kinds(mir: &mir::Body<'_>) -> IndexVec<mir::BasicBlock, Cl
                 | TerminatorKind::FalseUnwind { .. }
                 // NOTE(jhilton): if we add unwind behavior, we'll probably have to add a field here.
                 // This match is spelled out because it makes us get a compile error when we add the field.
-                | TerminatorKind::Detach { spawned_task: _, continuation: _ }
-                | TerminatorKind::Reattach { continuation: _ }
-                | TerminatorKind::Sync { target: _ } => { /* nothing to do */}
+                | TerminatorKind::Detach { .. }
+                | TerminatorKind::Reattach { .. }
+                | TerminatorKind::Sync { .. } => { /* nothing to do */}
                 TerminatorKind::Call { unwind, .. }
                 | TerminatorKind::InlineAsm { unwind, .. }
                 | TerminatorKind::Assert { unwind, .. }

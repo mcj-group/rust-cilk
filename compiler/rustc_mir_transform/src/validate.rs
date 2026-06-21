@@ -524,14 +524,14 @@ impl<'a, 'tcx> Visitor<'tcx> for CfgChecker<'a, 'tcx> {
             TerminatorKind::Unreachable => {}
             // NOTE(jhilton): this validation will change when we add unwinding for reattach and detach,
             // since we'll have to validate the unwind edge.
-            TerminatorKind::Reattach { continuation } => {
+            TerminatorKind::Reattach { sync_region: _, continuation } => {
                 self.check_edge(location, *continuation, EdgeKind::Normal);
             }
-            TerminatorKind::Detach { spawned_task, continuation } => {
+            TerminatorKind::Detach { sync_region: _, spawned_task, continuation } => {
                 self.check_edge(location, *spawned_task, EdgeKind::Normal);
                 self.check_edge(location, *continuation, EdgeKind::Normal);
             }
-            TerminatorKind::Sync { target } => {
+            TerminatorKind::Sync { sync_region: _, target } => {
                 self.check_edge(location, *target, EdgeKind::Normal);
             }
         }

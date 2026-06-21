@@ -243,7 +243,7 @@ impl<'tcx> Analysis<'tcx> for MaybeRequiresStorage<'_, 'tcx> {
             // Detach isn't particularly interesting in terms of storage requirements itself.
             | TerminatorKind::Detach { .. }
             // Reattach doesn't perform the assignment itself.
-            | TerminatorKind::Reattach { continuation: _ }
+            | TerminatorKind::Reattach { .. }
             // Sync also shouldn't need storage.
             | TerminatorKind::Sync { .. } => {}
         }

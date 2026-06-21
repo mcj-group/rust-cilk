@@ -1024,9 +1024,9 @@ impl<'tcx> TerminatorKind<'tcx> {
                 }
                 write!(fmt, ", options({options:?}))")
             }
-            Detach { .. } => write!(fmt, "detach"),
-            Reattach { .. } => write!(fmt, "reattach"),
-            Sync { .. } => write!(fmt, "sync"),
+            Detach { sync_region, .. } => write!(fmt, "detach {sync_region:?}"),
+            Reattach { sync_region, .. } => write!(fmt, "reattach {sync_region:?}"),
+            Sync { sync_region, .. } => write!(fmt, "sync {sync_region:?}"),
         }
     }
 

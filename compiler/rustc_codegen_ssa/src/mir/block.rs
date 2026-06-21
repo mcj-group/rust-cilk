@@ -1636,7 +1636,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             // FIXME(jhilton): for backends that don't support Tapir, we can merge successors.
             // I can't use fn codegen_statement to generate taskframe create and use because they are not in the MIR (should I put them in the MIR?)
-            mir::TerminatorKind::Detach { spawned_task, continuation } => {
+            mir::TerminatorKind::Detach { sync_region: _, spawned_task, continuation } => {
                 let spawned_task = self.llbb(spawned_task);
                 if Bx::supports_tapir() {
                     let continuation = self.llbb(continuation);
@@ -1649,7 +1649,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 }
                 MergingSucc::False
             }
-            mir::TerminatorKind::Reattach { continuation } => {
+            mir::TerminatorKind::Reattach { sync_region: _, continuation } => {
                 let continuation = self.llbb(continuation);
                 if Bx::supports_tapir() {
                     self.sync_region_stack.pop();
@@ -1659,7 +1659,7 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                 }
                 MergingSucc::False
             }
-            mir::TerminatorKind::Sync { target } => {
+            mir::TerminatorKind::Sync { sync_region: _, target } => {
                 let target = self.llbb(target);
                 if Bx::supports_tapir() {
                     bx.sync(target, *self.sync_region());

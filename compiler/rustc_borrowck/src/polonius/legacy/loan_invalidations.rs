@@ -162,7 +162,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LoanInvalidationsGenerator<'a, 'tcx> {
 
                 self.mutate_place(location, *resume_arg, Deep);
             }
-            TerminatorKind::Reattach { continuation } => {
+            TerminatorKind::Reattach { sync_region: _, continuation } => {
                 // FIXME(jhilton): Should we be invalidating locals in the current basic block as well? I think we should be,
                 // for consistency with what we did in the type-checker. My concern is that we only want to kill locals for the
                 // *current block*, which I don't think we're currently expressing. One way to think about modeling this
@@ -227,7 +227,7 @@ impl<'a, 'tcx> Visitor<'tcx> for LoanInvalidationsGenerator<'a, 'tcx> {
             | TerminatorKind::Unreachable
             | TerminatorKind::FalseEdge { real_target: _, imaginary_target: _ }
             | TerminatorKind::FalseUnwind { real_target: _, unwind: _ }
-            | TerminatorKind::Detach { spawned_task: _, continuation: _ }
+            | TerminatorKind::Detach { .. }
             // NOTE(jhilton): even in future, Sync shouldn't invalidate any loans on its own.
             | TerminatorKind::Sync { .. } => {
                 // no data used, thus irrelevant to borrowck

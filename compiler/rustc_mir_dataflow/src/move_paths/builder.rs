@@ -534,7 +534,7 @@ impl<'a, 'tcx, F: Fn(Ty<'tcx>) -> bool> MoveDataBuilder<'a, 'tcx, F> {
             }
 
             // Reattach doesn't do the codegen for the assignment itself, it's pushed right before the terminator instead.
-            TerminatorKind::Reattach { continuation: _ } => {}
+            TerminatorKind::Reattach { .. } => {}
 
             // Neither Detach or Sync are responsible for any moves themselves.
             TerminatorKind::Detach { .. }

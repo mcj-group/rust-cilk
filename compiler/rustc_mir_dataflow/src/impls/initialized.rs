@@ -426,7 +426,7 @@ impl<'tcx> Analysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
         // The continuation is only reached via `Reattach`, at which point any places
         // initialized in the spawned task are committed. Skipping the direct
         // Detach→continuation edge avoids a spurious "possibly-uninitialized" join.
-        if let mir::TerminatorKind::Detach { spawned_task, continuation: _ } = terminator.kind {
+        if let mir::TerminatorKind::Detach { spawned_task, ..} = terminator.kind {
             edges = TerminatorEdges::Single(spawned_task);
         }
         drop_flag_effects_for_location(self.body, self.move_data, location, |path, s| {

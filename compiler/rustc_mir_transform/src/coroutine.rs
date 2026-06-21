@@ -1802,7 +1802,7 @@ impl<'tcx> Visitor<'tcx> for EnsureCoroutineFieldAssignmentsNeverAlias<'_> {
                 self.check_assigned_place(*resume_arg, |this| this.visit_operand(value, location));
             }
 
-            TerminatorKind::Reattach { continuation: _ } => {}
+            TerminatorKind::Reattach { .. } => {}
 
             TerminatorKind::Detach { .. } => {}
 

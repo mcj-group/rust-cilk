@@ -983,7 +983,7 @@ impl<'a, 'tcx> ResultsVisitor<'tcx, Borrowck<'a, 'tcx>> for MirBorrowckCtxt<'a, 
             | TerminatorKind::FalseEdge { real_target: _, imaginary_target: _ }
             | TerminatorKind::FalseUnwind { real_target: _, unwind: _ }
             | TerminatorKind::Detach { .. }
-            | TerminatorKind::Reattach { continuation: _ }
+            | TerminatorKind::Reattach { .. }
             // FIXME(jhilton): I think at some point we're going to need some integration between BorrowCk and Spawn/Sync so we can mark
             // what regions of code need to have sync types.
             | TerminatorKind::Sync { .. } => {

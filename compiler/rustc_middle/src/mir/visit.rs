@@ -630,9 +630,9 @@ macro_rules! make_mir_visitor {
 
                     // NOTE(jhilton): this should be the right visitor behavior since there are no direct values to visit.
 
-                    TerminatorKind::Detach { spawned_task: _, continuation: _ } => {}
+                    TerminatorKind::Detach { .. } => {}
 
-                    TerminatorKind::Reattach { continuation: _ } => {}
+                    TerminatorKind::Reattach { .. } => {}
 
                     TerminatorKind::Sync { .. } => {}
 

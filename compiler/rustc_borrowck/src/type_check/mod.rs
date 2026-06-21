@@ -2110,17 +2110,17 @@ impl<'a, 'tcx> TypeChecker<'a, 'tcx> {
                 }
                 self.assert_iscleanup_unwind(block_data, unwind, is_cleanup);
             }
-            TerminatorKind::Reattach { continuation: _ } => {
+            TerminatorKind::Reattach { .. } => {
                 if is_cleanup {
                     span_mirbug!(self, block_data, "reattach in cleanup block");
                 }
             }
-            TerminatorKind::Detach { spawned_task: _, continuation: _ } => {
+            TerminatorKind::Detach { .. } => {
                 if is_cleanup {
                     span_mirbug!(self, block_data, "detach in cleanup block");
                 }
             }
-            TerminatorKind::Sync { target: _ } => {
+            TerminatorKind::Sync { .. } => {
                 if is_cleanup {
                     span_mirbug!(self, block_data, "sync in cleanup block");
                 }

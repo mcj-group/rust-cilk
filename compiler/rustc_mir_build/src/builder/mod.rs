@@ -524,6 +524,8 @@ fn construct_fn<'tcx>(
         coroutine,
     );
 
+    builder.scopes.enter_sync_region();
+
     let call_site_scope =
         region::Scope { local_id: body.id().hir_id.local_id, data: region::ScopeData::CallSite };
     let arg_scope =

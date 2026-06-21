@@ -125,7 +125,7 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
     let task_info = TaskInfo::from_body(body);
     for task in task_info.child_tasks() {
         let reattach_loc = task_info.expect_last_location(task);
-        let TerminatorKind::Reattach { continuation } =
+        let TerminatorKind::Reattach { sync_region: _, continuation } =
             body.basic_blocks[reattach_loc.block].terminator().kind
         else {
             bug!(

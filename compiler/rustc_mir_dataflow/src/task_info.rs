@@ -276,17 +276,17 @@ impl<'body, 'tcx> TaskInfoBuilder<'body, 'tcx> {
             let location = Location { block, statement_index: block_data.statements.len() };
             let terminator = block_data.terminator();
             match &terminator.kind {
-                mir::TerminatorKind::Detach { spawned_task, continuation } => {
+                mir::TerminatorKind::Detach { sync_region: _, spawned_task, continuation } => {
                     let new_task = TaskDataBuilder::new_child(&mut builder.tasks, current_task);
                     builder.label_block_task(*spawned_task, new_task);
                     builder.label_block_task(*continuation, current_task);
                 }
 
-                mir::TerminatorKind::Reattach { continuation } => {
+                mir::TerminatorKind::Reattach { sync_region: _, continuation } => {
                     builder.reattach_to(location, current_task, *continuation);
                 }
 
-                mir::TerminatorKind::Sync { target } => {
+                mir::TerminatorKind::Sync { sync_region: _, target } => {
                     // After a sync, it's still the same task.
                     builder.label_block_task(*target, current_task);
                 }
