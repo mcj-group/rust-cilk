@@ -520,6 +520,9 @@ impl<'tcx> Stable<'tcx> for mir::NonDivergingIntrinsic<'tcx> {
                 crate::mir::NonDivergingIntrinsic::TaskframeCreate
             }
             NonDivergingIntrinsic::TaskframeUse => crate::mir::NonDivergingIntrinsic::TaskframeUse,
+            NonDivergingIntrinsic::TapirSyncRegionStart(sync_region) => {
+                crate::mir::NonDivergingIntrinsic::TapirSyncRegionStart(*sync_region)
+            }
         }
     }
 }

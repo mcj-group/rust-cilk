@@ -257,6 +257,19 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
     fn var_local_id(&self, id: LocalVarId, for_guard: ForGuard) -> Local {
         self.var_indices[&id].local_id(for_guard)
     }
+
+    fn create_sync_region(&mut self, bb: BasicBlock, source_info: SourceInfo) {
+        self.scopes.enter_sync_region();
+        self.cfg.push(
+            bb,
+            Statement::new(
+                source_info,
+                StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TapirSyncRegionStart(
+                    self.scopes.current_sync_region(),
+                ))),
+            ),
+        );
+    }
 }
 
 impl BlockContext {
@@ -524,13 +537,14 @@ fn construct_fn<'tcx>(
         coroutine,
     );
 
-    builder.scopes.enter_sync_region();
-
     let call_site_scope =
         region::Scope { local_id: body.id().hir_id.local_id, data: region::ScopeData::CallSite };
     let arg_scope =
         region::Scope { local_id: body.id().hir_id.local_id, data: region::ScopeData::Arguments };
     let source_info = builder.source_info(span);
+
+    builder.create_sync_region(START_BLOCK, source_info);
+
     let call_site_s = (call_site_scope, source_info);
     let _: BlockAnd<()> = builder.in_scope(call_site_s, LintLevel::Inherited, |builder| {
         let arg_scope_s = (arg_scope, source_info);

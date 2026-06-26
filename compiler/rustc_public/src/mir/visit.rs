@@ -197,7 +197,8 @@ macro_rules! make_mir_visitor {
                         NonDivergingIntrinsic::TapirRuntimeStart
                         | NonDivergingIntrinsic::TapirRuntimeStop
                         | NonDivergingIntrinsic::TaskframeCreate
-                        | NonDivergingIntrinsic::TaskframeUse => {},
+                        | NonDivergingIntrinsic::TaskframeUse
+                        | NonDivergingIntrinsic::TapirSyncRegionStart(_) => {},
                     },
                     StatementKind::ConstEvalCounter | StatementKind::Nop => {}
                 }

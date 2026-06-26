@@ -91,6 +91,7 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
                     | NonDivergingIntrinsic::TapirRuntimeStop
                     | NonDivergingIntrinsic::TaskframeCreate
                     | NonDivergingIntrinsic::TaskframeUse => INSTR_COST,
+                    NonDivergingIntrinsic::TapirSyncRegionStart(_) => 0,
                 };
             }
             StatementKind::Assign(..) => self.penalty += INSTR_COST,

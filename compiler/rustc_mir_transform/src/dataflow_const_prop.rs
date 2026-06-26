@@ -205,7 +205,8 @@ impl<'a, 'tcx> ConstAnalysis<'a, 'tcx> {
             NonDivergingIntrinsic::TapirRuntimeStart
             | NonDivergingIntrinsic::TapirRuntimeStop
             | NonDivergingIntrinsic::TaskframeCreate
-            | NonDivergingIntrinsic::TaskframeUse => {}
+            | NonDivergingIntrinsic::TaskframeUse
+            | NonDivergingIntrinsic::TapirSyncRegionStart(_) => {}
         }
     }
 

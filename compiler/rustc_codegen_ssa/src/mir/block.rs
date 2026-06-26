@@ -1399,16 +1399,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         )
     }
 
-    fn sync_region(&mut self) -> &Bx::Value {
-        self.try_sync_region().unwrap_or_else(|| {
-            bug!("expected to have sync region!");
-        })
-    }
-
-    fn try_sync_region(&mut self) -> Option<&Bx::Value> {
-        self.sync_region_stack.last()
-    }
-
     pub(crate) fn codegen_block(&mut self, mut bb: mir::BasicBlock) {
         let llbb = match self.try_llbb(bb) {
             Some(llbb) => llbb,
@@ -1427,7 +1417,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             // LLVM InlineFunction should replace sync region of the orphaning function with the parent sync region
             if self.parallel_back_edges.contains(bb) {
-                bx.orphaning_syncregion(*self.sync_region(), &llbb);
+                todo!();
+                // bx.orphaning_syncregion(*self.sync_region, &llbb);
             }
 
             for statement in &data.statements {
@@ -1636,33 +1627,50 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             // FIXME(jhilton): for backends that don't support Tapir, we can merge successors.
             // I can't use fn codegen_statement to generate taskframe create and use because they are not in the MIR (should I put them in the MIR?)
-            mir::TerminatorKind::Detach { sync_region: _, spawned_task, continuation } => {
+            mir::TerminatorKind::Detach { sync_region, spawned_task, continuation } => {
                 let spawned_task = self.llbb(spawned_task);
                 if Bx::supports_tapir() {
                     let continuation = self.llbb(continuation);
 
                     // ================= TERMINATOR =================
-                    bx.detach(spawned_task, continuation, *self.sync_region());
-                    self.sync_region_stack.push(bx.sync_region_start_bb(&spawned_task));
+                    bx.detach(
+                        spawned_task,
+                        continuation,
+                        *self
+                            .sync_region_map
+                            .get(&sync_region)
+                            .expect("no sync region found for detach"),
+                    );
                 } else {
                     bx.br(spawned_task);
                 }
                 MergingSucc::False
             }
-            mir::TerminatorKind::Reattach { sync_region: _, continuation } => {
+            mir::TerminatorKind::Reattach { sync_region, continuation } => {
                 let continuation = self.llbb(continuation);
                 if Bx::supports_tapir() {
-                    self.sync_region_stack.pop();
-                    bx.reattach(continuation, *self.sync_region());
+                    bx.reattach(
+                        continuation,
+                        *self
+                            .sync_region_map
+                            .get(&sync_region)
+                            .expect("no sync region found for reattach"),
+                    );
                 } else {
                     bx.br(continuation);
                 }
                 MergingSucc::False
             }
-            mir::TerminatorKind::Sync { sync_region: _, target } => {
+            mir::TerminatorKind::Sync { sync_region, target } => {
                 let target = self.llbb(target);
                 if Bx::supports_tapir() {
-                    bx.sync(target, *self.sync_region());
+                    bx.sync(
+                        target,
+                        *self
+                            .sync_region_map
+                            .get(&sync_region)
+                            .expect("no sync region found for sync"),
+                    );
                 } else {
                     bx.br(target);
                 }

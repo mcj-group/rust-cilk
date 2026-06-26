@@ -14,6 +14,7 @@ use rustc_span::def_id::LocalDefId;
 use rustc_span::source_map::Spanned;
 use rustc_span::{Span, Symbol};
 use rustc_target::asm::InlineAsmRegOrRegClass;
+use serde::Serialize;
 use smallvec::SmallVec;
 
 use super::{BasicBlock, Const, Local, UserTypeProjection};
@@ -529,6 +530,8 @@ pub enum NonDivergingIntrinsic<'tcx> {
     /// Although one value is accepted as a parameter, it won't be observed by any Rust caller
     /// since it's a token from `taskframe_create`.
     TaskframeUse,
+
+    TapirSyncRegionStart(SyncRegion),
 }
 
 /// Describes what kind of retag is to be performed.
@@ -694,7 +697,7 @@ pub enum InlineAsmMacro {
 }
 
 rustc_index::newtype_index! {
-    #[derive(HashStable)]
+    #[derive(HashStable, Serialize)]
     #[encodable]
     #[orderable]
     #[debug_format = "sr{}"]

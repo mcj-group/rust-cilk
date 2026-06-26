@@ -404,6 +404,7 @@ impl<'a, 'tcx> TOFinder<'a, 'tcx> {
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirRuntimeStop)
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate)
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse)
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirSyncRegionStart(_))
             | StatementKind::AscribeUserType(..)
             | StatementKind::Coverage(..)
             | StatementKind::FakeRead(..)

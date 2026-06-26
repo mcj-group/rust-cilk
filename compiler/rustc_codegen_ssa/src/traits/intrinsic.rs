@@ -50,7 +50,6 @@ pub trait IntrinsicCallBuilderMethods<'tcx>: BackendTypes {
     /// Rust defined C-variadic functions return.
     fn va_end(&mut self, val: Self::Value) -> Self::Value;
     fn sync_region_start(&mut self) -> Self::Value;
-    fn sync_region_start_bb(&mut self, bb: &Self::BasicBlock) -> Self::Value;
     fn tapir_runtime_start(&mut self) -> Self::Value;
     fn tapir_runtime_end(&mut self, token: Self::Value);
     fn orphaning_syncregion(&mut self, token: Self::Value, bb: &Self::BasicBlock);

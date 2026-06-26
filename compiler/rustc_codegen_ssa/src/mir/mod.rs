@@ -1,9 +1,10 @@
 use std::iter;
 
+use rustc_data_structures::fx::FxHashMap;
 use rustc_index::IndexVec;
 use rustc_index::bit_set::DenseBitSet;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
-use rustc_middle::mir::{Body, Local, UnwindTerminateReason, traversal};
+use rustc_middle::mir::{Body, Local, SyncRegion, UnwindTerminateReason, traversal};
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
 use rustc_middle::{bug, mir, span_bug};
@@ -122,13 +123,6 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
     /// Caller location propagated if this function has `#[track_caller]`.
     caller_location: Option<OperandRef<'tcx, Bx::Value>>,
 
-    /// The sync_region for this function. We expect to only need one sync region for simple
-    /// cases, so we'll not worry about a more complex representation for now. We also don't use
-    /// OperandRef here since sync regions don't have a corresponding Rust type and are fairly
-    /// similar to PhantomData. We do cache the sync region so that the first time it's requested,
-    /// we add a statement to compute the sync region.
-    sync_region: Option<Bx::Value>,
-
     /// We need to know the basic blocks terminated by back-edges that go into
     /// parallel loop headers. This is so we can annotate with the right metadata.
     parallel_back_edges: DenseBitSet<mir::BasicBlock>,
@@ -138,10 +132,8 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
     /// my impression that that isn't the case.
     runtime_hint_stack: SmallVec<[Bx::Value; 1]>,
 
-    // sync region stack to insert sync region start in detached context (first bb after detach terminator)
-    sync_region_stack: SmallVec<[Bx::Value; 1]>,
-    // A stack of values returned from `taskframe_create` for use in their corresponding `taskframe_use` call.
-    // taskframe_hint_stack: SmallVec<[Bx::Value; 1]>,
+    /// maps SyncRegion annotations provided by the mir to their corresponding values in ssa
+    sync_region_map: FxHashMap<SyncRegion, Bx::Value>,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -258,10 +250,9 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         debug_context,
         per_local_var_debug_info: None,
         caller_location: None,
-        sync_region: None,
         parallel_back_edges: DenseBitSet::new_empty(mir.basic_blocks.len()),
         runtime_hint_stack: SmallVec::new(),
-        sync_region_stack: SmallVec::new(),
+        sync_region_map: FxHashMap::default(),
         // taskframe_hint_stack: SmallVec::new(),
     };
 
@@ -355,11 +346,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     if Bx::supports_tapir() && uses_cilk_control_flow() {
         //  && !fx.mir.orphaning
 
-        // Add a sync region at the top of the function, so we can use it later.
-        let region_0 = start_bx.sync_region_start();
-        fx.sync_region = Some(region_0);
-        fx.sync_region_stack.push(region_0);
-
         // Let's figure out the parallel back-edges. These are edges into parallel
         // loop headers.
         parallel_back_edges().for_each(|bb| {
@@ -377,7 +363,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         fx.codegen_block(bb);
         unreached_blocks.remove(bb);
     }
-    fx.sync_region_stack.pop();
 
     // FIXME: These empty unreachable blocks are *mostly* a waste. They are occasionally
     // targets for a SwitchInt terminator, but the reimplementation of the mono-reachable

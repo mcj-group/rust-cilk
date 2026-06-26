@@ -912,7 +912,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     },
                 );
 
-                this.scopes.enter_sync_region();
+                this.create_sync_region(spawned_task, source_info);
 
                 this.scopes.reattach_targets.push(reattach_block);
                 let spawned_result =
@@ -941,7 +941,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
 
             ExprKind::CilkScope { block: ast_block } => {
-                this.scopes.enter_sync_region();
+                this.create_sync_region(block, source_info);
 
                 // Give a hint to start the runtime at the beginning of the scope.
                 let start_runtime_kind =

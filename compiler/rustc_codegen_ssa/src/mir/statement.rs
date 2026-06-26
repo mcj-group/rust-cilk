@@ -103,6 +103,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
                     bx.tapir_runtime_end(token);
                 }
             }
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirSyncRegionStart(
+                sync_region,
+            )) => {
+                self.sync_region_map.insert(sync_region, bx.sync_region_start());
+            }
             mir::StatementKind::FakeRead(..)
             | mir::StatementKind::Retag { .. }
             | mir::StatementKind::AscribeUserType(..)

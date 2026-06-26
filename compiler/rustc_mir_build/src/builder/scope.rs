@@ -121,7 +121,6 @@ pub(crate) struct Scopes<'tcx> {
 
     sync_regions: Vec<SyncRegion>,
     next_sync_region: u32,
-    sync_region_used: bool,
 
     /// Drops that need to be done on unwind paths. See the comment on
     /// [DropTree] for more details.
@@ -495,7 +494,6 @@ impl<'tcx> Scopes<'tcx> {
             reattach_targets: Vec::new(),
             sync_regions: Vec::new(),
             next_sync_region: 0,
-            sync_region_used: true,
             unwind_drops: DropTree::new(),
             coroutine_drops: DropTree::new(),
         }
@@ -533,29 +531,17 @@ impl<'tcx> Scopes<'tcx> {
     }
 
     pub(crate) fn enter_sync_region(&mut self) {
-        if !self.sync_region_used {
-            self.next_sync_region += 1;
-        }
         let sync_region = SyncRegion::from_u32(self.next_sync_region);
         self.sync_regions.push(sync_region);
-
-        // We track whether or not the sync region gets used
-        // if it doesn't, reuse its index
-        // this will be the case for tasks with no children
-        self.sync_region_used = false;
+        self.next_sync_region += 1;
     }
 
-    pub(crate) fn current_sync_region(&mut self) -> SyncRegion {
-        if !self.sync_region_used {
-            self.sync_region_used = true;
-            self.next_sync_region += 1;
-        }
+    pub(crate) fn current_sync_region(&self) -> SyncRegion {
         *self.sync_regions.last().expect("no usable sync regions")
     }
 
     pub(crate) fn exit_sync_region(&mut self) {
         self.sync_regions.pop();
-        self.sync_region_used = true;
     }
 }
 
