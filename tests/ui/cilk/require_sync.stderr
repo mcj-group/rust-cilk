@@ -1,0 +1,14 @@
+error[E0597]: `x` does not live long enough
+  --> $DIR/require_sync.rs:16:36
+   |
+LL |     let x = Rc::new(RefCell::new(1_usize));
+   |         - binding `x` declared here
+LL |     // Rc<T> is not Sync so we can't use it here.
+LL |     cilk_spawn { let x = Rc::clone(&x); x.replace_with(|n| *n + 1) };
+   |                                    ^^ borrowed value does not live long enough
+LL | }
+   | - `x` dropped here while still borrowed
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0597`.
