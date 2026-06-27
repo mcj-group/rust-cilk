@@ -1,0 +1,9 @@
+error[E0499]: cannot borrow `i` as mutable more than once at a time
+  --> $DIR/consume_iter_ice.rs:26:37
+   |
+LL |                 if let Some(item) = i.next() {
+   |                                     ^ `i` was mutably borrowed here in the previous iteration of the loop
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0499`.
