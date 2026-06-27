@@ -610,6 +610,7 @@ symbols! {
         cfi_encoding,
         char,
         cilk,
+        cilk_grainsize,
         client,
         clippy,
         clobber_abi,

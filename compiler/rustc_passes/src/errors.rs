@@ -1449,3 +1449,10 @@ pub(crate) struct FunctionNamesDuplicated {
     #[primary_span]
     pub spans: Vec<Span>,
 }
+
+#[derive(Diagnostic)]
+#[diag("`#[cilk_grainsize] can only be applied to `cilk_for`")]
+pub(crate) struct CilkGrainsizeMisplaced { 
+    #[primary_span]
+    pub span: Span, 
+}

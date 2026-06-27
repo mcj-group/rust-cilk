@@ -824,6 +824,17 @@ pub static BUILTIN_ATTRIBUTES: &[BuiltinAttribute] = &[
     // Unstable attributes:
     // ==========================================================================
 
+    // Cilk_grainsize
+    gated!(
+        cilk_grainsize, Normal,
+        template!(
+            List: &["const"], 
+            "https://doc.rust-lang.org/reference/attributes/codegen.html#the-cold-attribute"
+        ),
+        ErrorPreceding, EncodeCrossCrate::Yes,
+        cilk, experimental!(cilk_grainsize)
+    ),
+
     // Linking:
     gated!(
         export_stable, Normal, template!(Word), WarnFollowing,

@@ -393,6 +393,10 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                         [sym::autodiff_forward, ..] | [sym::autodiff_reverse, ..] => {
                             self.check_autodiff(hir_id, attr, span, target)
                         }
+                        // attribute applied to `cilk_for`
+                        [sym::cilk_grainsize, ..]  => {
+                            self.check_cilkgrainsize(hir_id, attr, span, target)
+                        }
                         [
                             // ok
                             sym::allow
@@ -1828,6 +1832,21 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                 self.abort.set(true);
             }
         }
+    }
+
+    /// Checks if `#[cilk_grainszie(const G: u32)]` is applied to `cilk_for`
+    fn check_cilkgrainsize(&self, hir_id: HirId, attr: &Attribute, span: Span, target: Target) {
+        debug!("check_cilkgrainsize");
+        if target == Target::Expression{
+            let expr = self.tcx.hir_expect_expr(hir_id);
+            if let hir::ExprKind::DropTemps(inner) = expr.kind
+                && let hir::ExprKind::Match(_, [arm], hir::MatchSource::ForLoopDesugar) = inner.kind
+                && let hir::ExprKind::Loop(_, _, hir::LoopSource::CilkFor, _) = arm.body.kind
+            {
+                return; 
+            }
+        }
+        self.dcx().emit_err(errors::CilkGrainsizeMisplaced { span: attr_span });
     }
 
     fn check_loop_match(&self, hir_id: HirId, attr_span: Span, target: Target) {
