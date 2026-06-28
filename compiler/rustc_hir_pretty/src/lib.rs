@@ -1597,7 +1597,7 @@ impl<'a> State<'a> {
             hir::ExprKind::If(test, blk, elseopt) => {
                 self.print_if(test, blk, elseopt);
             }
-            hir::ExprKind::Loop(blk, opt_label, _, _) => {
+            hir::ExprKind::Loop(blk, opt_label, _, _, _) => {
                 let cb = self.cbox(0);
                 let ib = self.ibox(0);
                 if let Some(label) = opt_label {

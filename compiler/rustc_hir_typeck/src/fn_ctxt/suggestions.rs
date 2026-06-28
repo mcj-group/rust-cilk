@@ -2304,8 +2304,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         // Get the loop expr within the tail expr
         let loop_expr_in_tail = match expr.kind {
-            hir::ExprKind::Loop(_, _, hir::LoopSource::While, _) => tail_expr,
-            hir::ExprKind::Loop(_, _, hir::LoopSource::ForLoop, _) => {
+            hir::ExprKind::Loop(_, _, hir::LoopSource::While, _, _) => tail_expr,
+            hir::ExprKind::Loop(_, _, hir::LoopSource::ForLoop, _, _) => {
                 match tail_expr.peel_drop_temps() {
                     Expr { kind: ExprKind::Match(_, [Arm { body, .. }], _), .. } => body,
                     _ => return false, // Not really a for loop

@@ -1841,7 +1841,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
             let expr = self.tcx.hir_expect_expr(hir_id);
             if let hir::ExprKind::DropTemps(inner) = expr.kind
                 && let hir::ExprKind::Match(_, [arm], hir::MatchSource::ForLoopDesugar) = inner.kind
-                && let hir::ExprKind::Loop(_, _, hir::LoopSource::CilkFor, _) = arm.body.kind
+                && let hir::ExprKind::Loop(_, _, hir::LoopSource::CilkFor, _, _) = arm.body.kind
             {
                 return; 
             }

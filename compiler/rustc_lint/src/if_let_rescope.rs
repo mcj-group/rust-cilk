@@ -274,7 +274,7 @@ impl<'tcx> LateLintPass<'tcx> for IfLetRescope {
             return;
         }
 
-        if let hir::ExprKind::Loop(block, _label, hir::LoopSource::While, _span) = expr.kind
+        if let hir::ExprKind::Loop(block, _label, hir::LoopSource::While, _span, _) = expr.kind
             && let Some(value) = block.expr
             && let hir::ExprKind::If(cond, _conseq, _alt) = value.kind
             && let hir::ExprKind::Let(..) = cond.kind

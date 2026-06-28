@@ -376,8 +376,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             ExprKind::Ret(ref expr_opt) => self.check_expr_return(expr_opt.as_deref(), expr),
             ExprKind::Become(call) => self.check_expr_become(call, expr),
             ExprKind::Let(let_expr) => self.check_expr_let(let_expr, expr.hir_id),
-            ExprKind::Loop(body, _, source, _) => {
-                self.check_expr_loop(body, source, expected, expr)
+            ExprKind::Loop(body, _, source, _, grainsize) => {
+                self.check_expr_loop(body, source, grainsize, expected, expr)
             }
             ExprKind::Match(discrim, arms, match_src) => {
                 self.check_expr_match(expr, discrim, arms, expected, match_src)
@@ -1165,6 +1165,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             _,
                             hir::LoopSource::While,
                             _,
+                            _,
                         ),
                     ..
                 }) => {
@@ -1428,6 +1429,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         &self,
         body: &'tcx hir::Block<'tcx>,
         source: hir::LoopSource,
+        grainsize: Option<&'tcx hir::ConstArg<'tcx>>,
         expected: Expectation<'tcx>,
         expr: &'tcx hir::Expr<'tcx>,
     ) -> Ty<'tcx> {
@@ -1442,6 +1444,17 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
             hir::LoopSource::While | hir::LoopSource::ForLoop | hir::LoopSource::CilkFor => None,
         };
+
+        // ensures cilk_grainsize is u32
+        if source == hir::LoopSource::CilkFor
+            && let Some(grainsize) = grainsize
+        {
+            let grainsize = self.normalize(
+                grainsize.span,
+                self.lower_const_arg(grainsize, self.tcx.types.u32),
+            );
+            self.typeck_results.borrow_mut().cilk_grainsizes_mut().insert(expr.hir_id, grainsize);
+        }
 
         let ctxt = BreakableCtxt {
             coerce,

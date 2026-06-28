@@ -1436,6 +1436,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                         None,
                         hir::LoopSource::Loop,
                         span,
+                        None,
                     );
                     hir::Expr { hir_id: this.next_id(), kind: loop_, span }
                 } else {

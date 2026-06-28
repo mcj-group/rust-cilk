@@ -873,9 +873,10 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr<'v>) 
             try_visit!(visitor.visit_expr(then));
             visit_opt!(visitor, visit_expr, else_opt);
         }
-        ExprKind::Loop(ref block, ref opt_label, _, _) => {
+        ExprKind::Loop(ref block, ref opt_label, _, _, grainsize) => {
             visit_opt!(visitor, visit_label, opt_label);
             try_visit!(visitor.visit_block(block));
+            visit_opt!(visitor, visit_const_arg_unambig, grainsize);
         }
         ExprKind::Match(ref subexpression, arms, _) => {
             try_visit!(visitor.visit_expr(subexpression));

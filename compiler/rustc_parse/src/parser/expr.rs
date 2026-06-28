@@ -3155,11 +3155,8 @@ impl<'a> Parser<'a> {
             |parser| parser.parse_cilk_grainsize_arg(),
         )?;
 
-        *cilk_grainsize = Some(AnonConst {
-            id: DUMMY_NODE_ID,
-            value,
-            mgca_disambiguation: MgcaDisambiguation::AnonConst,
-        });
+        let mgca_disambiguation = self.mgca_direct_lit_hack(&value);
+        *cilk_grainsize = Some(AnonConst { id: DUMMY_NODE_ID, value, mgca_disambiguation });
         Ok(())
     }
 

@@ -1724,6 +1724,7 @@ impl<'tcx> CoerceMany<'tcx> {
                         _,
                         loop_src @ (hir::LoopSource::While | hir::LoopSource::ForLoop),
                         _,
+                        _,
                     ) = expr.kind
                     {
                         let loop_type = if loop_src == hir::LoopSource::While {

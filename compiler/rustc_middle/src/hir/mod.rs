@@ -304,7 +304,7 @@ impl<'tcx> TyCtxt<'tcx> {
 
                     // These expressions have no (direct) sub-exprs.
                     ExprKind::ConstBlock(_)
-                    | ExprKind::Loop(_, _, _, _)
+                    | ExprKind::Loop(_, _, _, _, _)
                     | ExprKind::Lit(_)
                     | ExprKind::Path(_)
                     | ExprKind::Continue(_)

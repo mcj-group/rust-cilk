@@ -624,7 +624,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     // loop, so we need to account for that.
                     direct = !direct;
                 }
-                if let hir::ExprKind::Loop(block, label, _, span) = parent.kind
+                if let hir::ExprKind::Loop(block, label, _, span, _) = parent.kind
                     && (destination.label == label || direct)
                 {
                     if let Some((reason_span, message)) =
@@ -647,7 +647,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                         impl<'tcx> Visitor<'tcx> for FindBreaks<'tcx> {
                             fn visit_expr(&mut self, ex: &'tcx hir::Expr<'tcx>) {
                                 let nest_depth = self.nest_depth;
-                                if let hir::ExprKind::Loop(_, label, _, _) = ex.kind {
+                                if let hir::ExprKind::Loop(_, label, _, _, _) = ex.kind {
                                     if label == self.label {
                                         // Account for `'a: loop { 'a: loop {...} }`.
                                         return;

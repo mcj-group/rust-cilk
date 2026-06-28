@@ -204,8 +204,16 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 //
                 // This also needs special handling because the HirId of the returned `hir::Expr` will not
                 // correspond to the `e.id`, so `lower_expr_for` handles attribute lowering itself.
-                ExprKind::ForLoop { pat, iter, body, label, kind } => {
-                    return self.lower_expr_for(e, pat, iter, body, *label, *kind);
+                ExprKind::ForLoop { pat, iter, body, label, kind, cilk_grainsize } => {
+                    return self.lower_expr_for(
+                        e,
+                        pat,
+                        iter,
+                        body,
+                        *label,
+                        *kind,
+                        cilk_grainsize.as_ref(),
+                    );
                 }
                 _ => (),
             }
@@ -309,6 +317,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                             opt_label,
                             hir::LoopSource::Loop,
                             this.lower_span(*span),
+                            None,
                         )
                     })
                 }
@@ -691,7 +700,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         let if_expr = self.expr(span, if_kind);
         let block = self.block_expr(self.arena.alloc(if_expr));
         let span = self.lower_span(span.with_hi(cond.span.hi()));
-        hir::ExprKind::Loop(block, opt_label, hir::LoopSource::While, span)
+        hir::ExprKind::Loop(block, opt_label, hir::LoopSource::While, span, None)
     }
 
     /// Desugar `try { <stmts>; <expr> }` into `{ <stmts>; ::std::ops::Try::from_output(<expr>) }`,
@@ -801,7 +810,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             });
             self.arena.alloc(hir::Expr {
                 hir_id: self.next_id(),
-                kind: hir::ExprKind::Loop(block, None, hir::LoopSource::Loop, span),
+                kind: hir::ExprKind::Loop(block, None, hir::LoopSource::Loop, span, None),
                 span,
             })
         };
@@ -1145,6 +1154,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 None,
                 hir::LoopSource::Loop,
                 self.lower_span(span),
+                None,
             ),
             span: self.lower_span(span),
         });
@@ -1917,6 +1927,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         body: &Box<Block>,
         opt_label: Option<Label>,
         loop_kind: ForLoopKind,
+        cilk_grainsize: Option<&AnonConst>,
     ) -> hir::Expr<'hir> {
         let head = self.lower_expr_mut(head);
         let ast_pat = pat;
@@ -2253,11 +2264,14 @@ impl<'hir> LoweringContext<'_, 'hir> {
         } else {
             hir::LoopSource::ForLoop
         };
+        let cilk_grainsize =
+            cilk_grainsize.map(|grainsize| self.lower_anon_const_to_const_arg_and_alloc(grainsize));
         let kind = hir::ExprKind::Loop(
             loop_block,
             label,
             loop_source,
             self.lower_span(for_span.with_hi(head.span.hi())),
+            cilk_grainsize,
         );
         let loop_expr = self.arena.alloc(hir::Expr { hir_id: loop_hir_id, kind, span: for_span });
 

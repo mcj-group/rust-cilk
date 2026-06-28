@@ -381,7 +381,7 @@ fn resolve_expr<'tcx>(
             visitor.cx = expr_cx;
         }
 
-        hir::ExprKind::Loop(body, _, _, _) => {
+        hir::ExprKind::Loop(body, _, _, _, _) => {
             resolve_block(visitor, body, true);
         }
 
