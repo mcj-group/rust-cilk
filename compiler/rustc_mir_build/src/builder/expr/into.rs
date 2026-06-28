@@ -211,7 +211,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 this.cfg.goto(short_circuit, source_info, target);
                 target.unit()
             }
-            ExprKind::Loop { body, tapir_loop_spawn } => {
+            ExprKind::Loop { body, tapir_loop_spawn, cilk_grainsize } => {
                 // [block]
                 //    |
                 //   [loop_block] -> [body_block] -/eval. body/-> [body_block_end]
@@ -225,7 +225,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // loop_block is the header. It needs to be a parallel loop header if
                 // this is the header to a parallel loop.
                 let loop_block = if tapir_loop_spawn {
-                    this.cfg.start_new_parallel_loop_header()
+                    this.cfg.start_new_parallel_loop_header(cilk_grainsize)
                 } else {
                     this.cfg.start_new_block()
                 };

@@ -928,7 +928,7 @@ impl<'tcx> ThirBuildCx<'tcx> {
                 arms: arms.iter().map(|a| self.convert_arm(a)).collect(),
                 match_source,
             },
-            hir::ExprKind::Loop(body, _, src, ..) => {
+            hir::ExprKind::Loop(body, _, src, _, _) => {
                 if find_attr!(self.tcx.hir_attrs(expr.hir_id), LoopMatch(_)) {
                     let dcx = self.tcx.dcx();
 
@@ -1024,7 +1024,9 @@ impl<'tcx> ThirBuildCx<'tcx> {
                     // have to spawn the body (when lowering to MIR we'll also sync after the
                     // loop).
                     let tapir_loop_spawn = matches!(src, hir::LoopSource::CilkFor);
-                    ExprKind::Loop { body, tapir_loop_spawn }
+                    let cilk_grainsize =
+                        self.typeck_results.cilk_grainsizes().get(expr.hir_id).copied();
+                    ExprKind::Loop { body, tapir_loop_spawn, cilk_grainsize }
                 }
             }
             hir::ExprKind::Field(source, ..) => ExprKind::Field {

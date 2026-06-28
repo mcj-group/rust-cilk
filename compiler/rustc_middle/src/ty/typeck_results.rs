@@ -151,6 +151,10 @@ pub struct TypeckResults<'tcx> {
     /// MIR construction and hence is not serialized to metadata.
     fru_field_types: ItemLocalMap<Vec<Ty<'tcx>>>,
 
+    /// For each `cilk_for` loop carrying a `#[cilk_grainsize(...)]` attribute, record the typed
+    /// grainsize constant. This table is used by THIR/MIR construction.
+    cilk_grainsizes: ItemLocalMap<ty::Const<'tcx>>,
+
     /// For every coercion cast we add the HIR node ID of the cast
     /// expression to this set.
     coercion_casts: ItemLocalSet,
@@ -242,6 +246,7 @@ impl<'tcx> TypeckResults<'tcx> {
             closure_kind_origins: Default::default(),
             liberated_fn_sigs: Default::default(),
             fru_field_types: Default::default(),
+            cilk_grainsizes: Default::default(),
             coercion_casts: Default::default(),
             used_trait_imports: Default::default(),
             tainted_by_errors: None,
@@ -543,6 +548,14 @@ impl<'tcx> TypeckResults<'tcx> {
 
     pub fn fru_field_types_mut(&mut self) -> LocalTableInContextMut<'_, Vec<Ty<'tcx>>> {
         LocalTableInContextMut { hir_owner: self.hir_owner, data: &mut self.fru_field_types }
+    }
+
+    pub fn cilk_grainsizes(&self) -> LocalTableInContext<'_, ty::Const<'tcx>> {
+        LocalTableInContext { hir_owner: self.hir_owner, data: &self.cilk_grainsizes }
+    }
+
+    pub fn cilk_grainsizes_mut(&mut self) -> LocalTableInContextMut<'_, ty::Const<'tcx>> {
+        LocalTableInContextMut { hir_owner: self.hir_owner, data: &mut self.cilk_grainsizes }
     }
 
     pub fn is_coercion_cast(&self, hir_id: HirId) -> bool {
