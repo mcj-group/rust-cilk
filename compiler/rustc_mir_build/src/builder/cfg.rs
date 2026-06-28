@@ -23,9 +23,12 @@ impl<'tcx> CFG<'tcx> {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn start_new_parallel_loop_header(&mut self) -> BasicBlock {
+    pub(crate) fn start_new_parallel_loop_header(
+        &mut self,
+        cilk_grainsize: Option<rustc_middle::ty::Const<'tcx>>,
+    ) -> BasicBlock {
         let mut block_data = BasicBlockData::new(None, false);
-        block_data.is_parallel_loop_header = true;
+        block_data.is_parallel_loop_header = Some(ParallelLoopHeader { cilk_grainsize });
         self.basic_blocks.push(block_data)
     }
 

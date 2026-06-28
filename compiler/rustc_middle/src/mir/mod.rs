@@ -1311,10 +1311,9 @@ pub struct BasicBlockData<'tcx> {
     /// only branch to other unwind blocks.
     pub is_cleanup: bool,
 
-    /// If true, this block is the loop header of a parallel loop. This
-    /// is used during codegen to provide appropriate attributes for
-    /// efficient Tapir parallel loops.
-    pub is_parallel_loop_header: bool,
+    /// If `Some`, this block is the loop header of a parallel loop. The payload stores metadata
+    /// attached to that header for codegen.
+    pub is_parallel_loop_header: Option<ParallelLoopHeader<'tcx>>,
 }
 
 impl<'tcx> BasicBlockData<'tcx> {
@@ -1333,7 +1332,8 @@ impl<'tcx> BasicBlockData<'tcx> {
             after_last_stmt_debuginfos: StmtDebugInfos::default(),
             terminator,
             is_cleanup,
-            is_parallel_loop_header,
+            is_parallel_loop_header: is_parallel_loop_header
+                .then_some(ParallelLoopHeader { cilk_grainsize: None }),
         }
     }
 
@@ -1399,6 +1399,12 @@ impl<'tcx> BasicBlockData<'tcx> {
             stmt.debuginfos.drop_debuginfo();
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, TyEncodable, TyDecodable, HashStable, TypeFoldable, TypeVisitable)]
+pub struct ParallelLoopHeader<'tcx> {
+    /// Optional grainsize attached to `cilk_for` by `#[cilk_grainsize(...)]`.
+    pub cilk_grainsize: Option<ty::Const<'tcx>>,
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1703,7 +1709,7 @@ mod size_asserts {
 
     use super::*;
     // tidy-alphabetical-start
-    static_assert_size!(BasicBlockData<'_>, 152);
+    static_assert_size!(BasicBlockData<'_>, 168);
     static_assert_size!(LocalDecl<'_>, 40);
     static_assert_size!(SourceScopeData<'_>, 64);
     static_assert_size!(Statement<'_>, 56);

@@ -312,7 +312,7 @@ macro_rules! make_mir_visitor {
                     after_last_stmt_debuginfos,
                     terminator,
                     is_cleanup: _,
-                    is_parallel_loop_header: _
+                    is_parallel_loop_header: _,
                 } = data;
 
                 let mut index = 0;
