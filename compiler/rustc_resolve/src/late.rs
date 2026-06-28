@@ -5138,8 +5138,14 @@ impl<'a, 'ast, 'ra, 'tcx> LateResolutionVisitor<'a, 'ast, 'ra, 'tcx> {
                 });
             }
 
-            ExprKind::ForLoop { ref pat, ref iter, ref body, label, kind: _ } => {
+            ExprKind::ForLoop { ref pat, ref iter, ref body, label, kind: _, cilk_grainsize: ref grainsize } => {
                 self.visit_expr(iter);
+                if let Some(cilk_grainsize) = grainsize {
+                    self.resolve_anon_const(
+                        cilk_grainsize,
+                        AnonConstKind::ConstArg(IsRepeatExpr::No),
+                    );
+                }
                 self.with_rib(ValueNS, RibKind::Normal, |this| {
                     this.resolve_pattern_top(pat, PatternSource::For);
                     this.resolve_labeled_block(label, expr.id, body);

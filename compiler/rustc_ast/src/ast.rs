@@ -1796,6 +1796,7 @@ pub enum ExprKind {
         body: Box<Block>,
         label: Option<Label>,
         kind: ForLoopKind,
+        cilk_grainsize: Option<AnonConst>,
     },
     /// Conditionless loop (can be exited with `break`, `continue`, or `return`).
     ///
@@ -4268,8 +4269,8 @@ mod size_asserts {
     static_assert_size!(AssocItemKind, 16);
     static_assert_size!(Attribute, 32);
     static_assert_size!(Block, 32);
-    static_assert_size!(Expr, 80);
-    static_assert_size!(ExprKind, 48);
+    static_assert_size!(Expr, 88);
+    static_assert_size!(ExprKind, 56);
     static_assert_size!(Fn, 192);
     static_assert_size!(ForeignItem, 80);
     static_assert_size!(ForeignItemKind, 16);

@@ -1835,7 +1835,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
     }
 
     /// Checks if `#[cilk_grainszie(const G: u32)]` is applied to `cilk_for`
-    fn check_cilkgrainsize(&self, hir_id: HirId, attr: &Attribute, span: Span, target: Target) {
+    fn check_cilkgrainsize(&self, hir_id: HirId, _attr: &Attribute, span: Span, target: Target) {
         debug!("check_cilkgrainsize");
         if target == Target::Expression{
             let expr = self.tcx.hir_expect_expr(hir_id);
@@ -1846,7 +1846,7 @@ impl<'tcx> CheckAttrVisitor<'tcx> {
                 return; 
             }
         }
-        self.dcx().emit_err(errors::CilkGrainsizeMisplaced { span: attr_span });
+        self.dcx().emit_err(errors::CilkGrainsizeMisplaced { span });
     }
 
     fn check_loop_match(&self, hir_id: HirId, attr_span: Span, target: Target) {

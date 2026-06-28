@@ -13,10 +13,10 @@ use rustc_ast::util::classify;
 use rustc_ast::util::parser::{AssocOp, ExprPrecedence, Fixity, prec_let_scrutinee_needs_par};
 use rustc_ast::visit::{Visitor, walk_expr};
 use rustc_ast::{
-    self as ast, AnonConst, Arm, AssignOp, AssignOpKind, AttrStyle, AttrVec, BinOp, BinOpKind,
-    BlockCheckMode, CaptureBy, ClosureBinder, DUMMY_NODE_ID, Expr, ExprField, ExprKind, FnDecl,
-    FnRetTy, Label, MacCall, MetaItemLit, MgcaDisambiguation, Movability, Param, RangeLimits,
-    StmtKind, Ty, TyKind, UnOp, UnsafeBinderCastKind, YieldKind,
+    self as ast, AnonConst, Arm, AssignOp, AssignOpKind, AttrArgs, AttrStyle, AttrVec, Attribute,
+    BinOp, BinOpKind, BlockCheckMode, CaptureBy, ClosureBinder, DUMMY_NODE_ID, Expr, ExprField,
+    ExprKind, FnDecl, FnRetTy, Label, MacCall, MetaItemLit, MgcaDisambiguation, Movability, Param,
+    RangeLimits, StmtKind, Ty, TyKind, UnOp, UnsafeBinderCastKind, YieldKind,
 };
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_errors::{Applicability, Diag, PResult, StashKey, Subdiagnostic};
@@ -946,6 +946,7 @@ impl<'a> Parser<'a> {
         if !attrs.is_empty()
             && let Ok(expr) = &mut res
         {
+            self.maybe_attach_cilk_grainsize(&mut expr.kind, &attrs)?;
             mem::swap(&mut expr.attrs, &mut attrs);
             expr.attrs.extend(attrs)
         }
@@ -3055,7 +3056,14 @@ impl<'a> Parser<'a> {
             let block = self.mk_block(thin_vec![], BlockCheckMode::Default, self.prev_token.span);
             return Ok(self.mk_expr(
                 lo.to(self.prev_token.span),
-                ExprKind::ForLoop { pat, iter: err_expr, body: block, label: opt_label, kind },
+                ExprKind::ForLoop {
+                    pat,
+                    iter: err_expr,
+                    body: block,
+                    label: opt_label,
+                    kind,
+                    cilk_grainsize: None,
+                },
             ));
         }
 
@@ -3065,7 +3073,14 @@ impl<'a> Parser<'a> {
             opt_label.is_none().then_some(lo),
         )?;
 
-        let kind = ExprKind::ForLoop { pat, iter: expr, body: loop_block, label: opt_label, kind };
+        let kind = ExprKind::ForLoop {
+            pat,
+            iter: expr,
+            body: loop_block,
+            label: opt_label,
+            kind,
+            cilk_grainsize: None,
+        };
 
         self.recover_loop_else("for", lo)?;
 
@@ -3100,6 +3115,66 @@ impl<'a> Parser<'a> {
         };
 
         self.dcx().emit_err(errors::MissingInInForLoop { span, sub: sub(span) });
+    }
+
+    fn maybe_attach_cilk_grainsize(
+        &mut self,
+        expr: &mut ExprKind,
+        attrs: &[Attribute],
+    ) -> PResult<'a, ()> {
+        // proceeds for `#[cilk_grainsize(arg)]` attached to `cilk_for`
+        let ExprKind::ForLoop { kind: ForLoopKind::CilkFor(_), cilk_grainsize, .. } = expr else {
+            return Ok(());
+        };
+        let Some(attr) = attrs.iter().find(|attr| attr.has_name(sym::cilk_grainsize)) else {
+            return Ok(());
+        };
+        let ast::AttrKind::Normal(normal_attr) = &attr.kind else {
+            return Ok(());
+        };
+        let args = match normal_attr.item.args.unparsed_ref() {
+            Some(AttrArgs::Delimited(args)) if args.delim == Delimiter::Parenthesis => args,
+            Some(args) => {
+                return Err(self.dcx().struct_span_err(
+                    args.span().unwrap_or(attr.span),
+                    "`cilk_grainsize` attribute must be of the form `#[cilk_grainsize(<literal-or-path>)]`",
+                ));
+            }
+            None => {
+                return Err(self.dcx().struct_span_err(
+                    attr.span,
+                    "`cilk_grainsize` attribute must be of the form `#[cilk_grainsize(<literal-or-path>)]`",
+                ));
+            }
+        };
+
+        let value = crate::parse_in(
+            self.psess,
+            args.tokens.clone(),
+            "cilk_grainsize attribute",
+            |parser| parser.parse_cilk_grainsize_arg(),
+        )?;
+
+        *cilk_grainsize = Some(AnonConst {
+            id: DUMMY_NODE_ID,
+            value,
+            mgca_disambiguation: MgcaDisambiguation::AnonConst,
+        });
+        Ok(())
+    }
+
+    fn parse_cilk_grainsize_arg(&mut self) -> PResult<'a, Box<Expr>> {
+        // only accepts literals or paths
+        if let token::Literal(_) = self.token.kind {
+            self.parse_expr_lit()
+        } else if self.check_path() {
+            self.parse_expr_path_start()
+        } else {
+            Err(self.dcx().struct_span_err(
+                self.token.span,
+                "expected literal or path in `cilk_grainsize` attribute",
+            ))
+        }
     }
 
     /// Parses a `while` or `while let` expression (`while` token already eaten).
