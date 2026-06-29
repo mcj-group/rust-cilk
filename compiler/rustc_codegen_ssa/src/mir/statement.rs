@@ -108,6 +108,21 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             )) => {
                 self.sync_region_map.insert(sync_region, bx.sync_region_start());
             }
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate(
+                taskframe,
+            )) => {
+                self.taskframe_map.insert(taskframe, bx.taskframe_create());
+            }
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse(taskframe)) => {
+                bx.taskframe_use(
+                    *self.taskframe_map.get(&taskframe).expect("cannot find taskframe"),
+                );
+            }
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeEnd(taskframe)) => {
+                bx.taskframe_end(
+                    *self.taskframe_map.get(&taskframe).expect("cannot find taskframe"),
+                );
+            }
             mir::StatementKind::FakeRead(..)
             | mir::StatementKind::Retag { .. }
             | mir::StatementKind::AscribeUserType(..)
@@ -115,8 +130,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             | mir::StatementKind::PlaceMention(..)
             | mir::StatementKind::BackwardIncompatibleDropHint { .. }
             | mir::StatementKind::Nop => {}
-            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate)
-            | mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse) => todo!(),
         }
     }
 

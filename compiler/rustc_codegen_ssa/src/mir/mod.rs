@@ -4,7 +4,7 @@ use rustc_data_structures::fx::FxHashMap;
 use rustc_index::IndexVec;
 use rustc_index::bit_set::DenseBitSet;
 use rustc_middle::middle::codegen_fn_attrs::CodegenFnAttrFlags;
-use rustc_middle::mir::{Body, Local, SyncRegion, UnwindTerminateReason, traversal};
+use rustc_middle::mir::{Body, Local, SyncRegion, Taskframe, UnwindTerminateReason, traversal};
 use rustc_middle::ty::layout::{FnAbiOf, HasTyCtxt, HasTypingEnv, TyAndLayout};
 use rustc_middle::ty::{self, Instance, Ty, TyCtxt, TypeFoldable, TypeVisitableExt};
 use rustc_middle::{bug, mir, span_bug};
@@ -134,6 +134,9 @@ pub struct FunctionCx<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> {
 
     /// maps SyncRegion annotations provided by the mir to their corresponding values in ssa
     sync_region_map: FxHashMap<SyncRegion, Bx::Value>,
+
+    /// maps Taskframe annotations provided by the mir to their corresponding values in ssa
+    taskframe_map: FxHashMap<Taskframe, Bx::Value>,
 }
 
 impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
@@ -253,6 +256,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         parallel_back_edges: DenseBitSet::new_empty(mir.basic_blocks.len()),
         runtime_hint_stack: SmallVec::new(),
         sync_region_map: FxHashMap::default(),
+        taskframe_map: FxHashMap::default(),
         // taskframe_hint_stack: SmallVec::new(),
     };
 

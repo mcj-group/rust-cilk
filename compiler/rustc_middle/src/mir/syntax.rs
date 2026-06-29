@@ -519,17 +519,14 @@ pub enum NonDivergingIntrinsic<'tcx> {
     /// since it's a token from `tapir_runtime_start`.
     TapirRuntimeStop,
 
-    // / Denotes a call to the intrinsic function `taskframe_create`.
-    ///
-    /// Although one value is returned, it won't be observed by any Rust caller since it's a
-    /// token for use by `taskframe_use`.
-    TaskframeCreate,
+    // / Denotes a call to the intrinsic function `llvm.taskframe.create`.
+    TaskframeCreate(Taskframe),
 
-    /// Denotes a call to the intrinsic function `taskframe_use`.
-    ///
-    /// Although one value is accepted as a parameter, it won't be observed by any Rust caller
-    /// since it's a token from `taskframe_create`.
-    TaskframeUse,
+    /// Denotes a call to the intrinsic function `llvm.taskframe.use`.
+    TaskframeUse(Taskframe),
+
+    /// Denotes a call to the intrinsic function `llvm.taskframe.end`.
+    TaskframeEnd(Taskframe),
 
     TapirSyncRegionStart(SyncRegion),
 }
@@ -705,6 +702,15 @@ rustc_index::newtype_index! {
     ///
     /// a sync only syncs tasks in the same sync region
     pub struct SyncRegion {}
+}
+
+rustc_index::newtype_index! {
+    #[derive(HashStable, Serialize)]
+    #[encodable]
+    #[orderable]
+    #[debug_format = "tf{}"]
+    /// The TaskframeCreate and TaskframeUse intrinsics must be tagged so we can associate them
+    pub struct Taskframe {}
 }
 
 ///////////////////////////////////////////////////////////////////////////

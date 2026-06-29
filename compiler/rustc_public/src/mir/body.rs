@@ -1,6 +1,6 @@
 use std::io;
 
-use rustc_middle::mir::SyncRegion;
+use rustc_middle::mir::{SyncRegion, Taskframe};
 use serde::Serialize;
 
 use crate::compiler_interface::with;
@@ -485,8 +485,9 @@ pub enum NonDivergingIntrinsic {
     CopyNonOverlapping(CopyNonOverlapping),
     TapirRuntimeStart,
     TapirRuntimeStop,
-    TaskframeCreate,
-    TaskframeUse,
+    TaskframeCreate(Taskframe),
+    TaskframeUse(Taskframe),
+    TaskframeEnd(Taskframe),
     TapirSyncRegionStart(SyncRegion),
 }
 

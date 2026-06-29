@@ -122,6 +122,8 @@ pub(crate) struct Scopes<'tcx> {
     sync_regions: Vec<SyncRegion>,
     next_sync_region: u32,
 
+    next_taskframe: u32,
+
     /// Drops that need to be done on unwind paths. See the comment on
     /// [DropTree] for more details.
     unwind_drops: DropTree,
@@ -494,6 +496,7 @@ impl<'tcx> Scopes<'tcx> {
             reattach_targets: Vec::new(),
             sync_regions: Vec::new(),
             next_sync_region: 0,
+            next_taskframe: 0,
             unwind_drops: DropTree::new(),
             coroutine_drops: DropTree::new(),
         }
@@ -542,6 +545,12 @@ impl<'tcx> Scopes<'tcx> {
 
     pub(crate) fn exit_sync_region(&mut self) {
         self.sync_regions.pop();
+    }
+
+    pub(crate) fn get_taskframe(&mut self) -> Taskframe {
+        let taskframe = Taskframe::from_u32(self.next_taskframe);
+        self.next_taskframe += 1;
+        taskframe
     }
 }
 
