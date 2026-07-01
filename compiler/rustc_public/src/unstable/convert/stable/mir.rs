@@ -516,10 +516,18 @@ impl<'tcx> Stable<'tcx> for mir::NonDivergingIntrinsic<'tcx> {
             NonDivergingIntrinsic::TapirRuntimeStop => {
                 crate::mir::NonDivergingIntrinsic::TapirRuntimeStop
             }
-            NonDivergingIntrinsic::TaskframeCreate => {
-                crate::mir::NonDivergingIntrinsic::TaskframeCreate
+            NonDivergingIntrinsic::TaskframeCreate(taskframe) => {
+                crate::mir::NonDivergingIntrinsic::TaskframeCreate(*taskframe)
             }
-            NonDivergingIntrinsic::TaskframeUse => crate::mir::NonDivergingIntrinsic::TaskframeUse,
+            NonDivergingIntrinsic::TaskframeUse(taskframe) => {
+                crate::mir::NonDivergingIntrinsic::TaskframeUse(*taskframe)
+            }
+            NonDivergingIntrinsic::TaskframeEnd(taskframe) => {
+                crate::mir::NonDivergingIntrinsic::TaskframeEnd(*taskframe)
+            }
+            NonDivergingIntrinsic::TapirSyncRegionStart(sync_region) => {
+                crate::mir::NonDivergingIntrinsic::TapirSyncRegionStart(*sync_region)
+            }
         }
     }
 }

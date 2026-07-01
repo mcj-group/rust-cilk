@@ -819,19 +819,6 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
     }
 
     fn sync_region_start(&mut self) -> &'ll Value {
-        unsafe {
-            llvm::LLVMRustPositionBuilderAtStart(
-                self.llbuilder,
-                llvm::LLVMGetFirstBasicBlock(self.llfn()),
-            );
-        }
-        self.call_intrinsic("llvm.syncregion.start", &[], &[])
-    }
-
-    fn sync_region_start_bb(&mut self, bb: &Self::BasicBlock) -> &'ll Value {
-        unsafe {
-            llvm::LLVMRustPositionBuilderAtStart(self.llbuilder, bb);
-        }
         self.call_intrinsic("llvm.syncregion.start", &[], &[])
     }
 
@@ -851,17 +838,17 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         self.call_intrinsic("llvm.tapir.runtime.end", &[], &[token]);
     }
 
-    // fn taskframe_create(&mut self) -> &'ll Value {
-    //     let thebb = unsafe { llvm::LLVMGetFirstBasicBlock(self.llfn()) };
-    //     unsafe {
-    //         llvm::LLVMRustPositionBuilderAtStart(self.llbuilder, thebb);
-    //     }
-    //     self.call_intrinsic("llvm.taskframe.create", &[])
-    // }
+    fn taskframe_create(&mut self) -> &'ll Value {
+        self.call_intrinsic("llvm.taskframe.create", &[], &[])
+    }
 
-    // fn taskframe_use(&mut self, token: &'ll Value) {
-    //     self.call_intrinsic("llvm.taskframe.use", &[token]);
-    // }
+    fn taskframe_use(&mut self, token: &'ll Value) {
+        self.call_intrinsic("llvm.taskframe.use", &[], &[token]);
+    }
+
+    fn taskframe_end(&mut self, token: &'ll Value) {
+        self.call_intrinsic("llvm.taskframe.end", &[], &[token]);
+    }
 }
 
 fn catch_unwind_intrinsic<'ll, 'tcx>(

@@ -36,6 +36,7 @@ smallvec = { version = "1.8.1", features = ["union", "may_dangle"] }
 thin-vec = "0.2.12"
 tracing = "0.1"
 # tidy-alphabetical-end
+serde = { version = "1.0.125", features = ["derive"] }
 
 [features]
 # tidy-alphabetical-start

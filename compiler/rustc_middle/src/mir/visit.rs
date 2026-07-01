@@ -496,7 +496,7 @@ macro_rules! make_mir_visitor {
                                 self.visit_operand(dst, location);
                                 self.visit_operand(count, location);
                             },
-                            NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop | NonDivergingIntrinsic::TaskframeCreate | NonDivergingIntrinsic::TaskframeUse => {},
+                            NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop | NonDivergingIntrinsic::TaskframeCreate(_) | NonDivergingIntrinsic::TaskframeUse(_) | NonDivergingIntrinsic::TaskframeEnd(_) | NonDivergingIntrinsic::TapirSyncRegionStart(_) => {},
                         }
                     }
                     StatementKind::BackwardIncompatibleDropHint { place, .. } => {

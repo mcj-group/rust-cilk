@@ -902,6 +902,17 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // multiple blocks can branch to it instead of having more than one reattach
                 let reattach_block = this.cfg.start_new_block();
 
+                let taskframe = this.scopes.get_taskframe();
+                this.cfg.push(
+                    block,
+                    Statement::new(
+                        source_info,
+                        StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeCreate(
+                            taskframe,
+                        ))),
+                    ),
+                );
+
                 this.cfg.terminate(
                     block,
                     source_info,
@@ -912,7 +923,16 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     },
                 );
 
-                this.scopes.enter_sync_region();
+                this.cfg.push(
+                    spawned_task,
+                    Statement::new(
+                        source_info,
+                        StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeUse(
+                            taskframe,
+                        ))),
+                    ),
+                );
+                this.create_sync_region(spawned_task, source_info);
 
                 this.scopes.reattach_targets.push(reattach_block);
                 let spawned_result =
@@ -941,13 +961,18 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
 
             ExprKind::CilkScope { block: ast_block } => {
-                this.scopes.enter_sync_region();
+                let taskframe = this.scopes.get_taskframe();
+                this.cfg.push(
+                    block,
+                    Statement::new(
+                        source_info,
+                        StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeCreate(
+                            taskframe,
+                        ))),
+                    ),
+                );
 
-                // Give a hint to start the runtime at the beginning of the scope.
-                let start_runtime_kind =
-                    StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TapirRuntimeStart));
-                let start_runtime = Statement::new(source_info, start_runtime_kind);
-                this.cfg.push(block, start_runtime);
+                this.create_sync_region(block, source_info);
 
                 // Generate the code for the block and end it in a sync.
                 unpack!(block = this.ast_block(destination, block, ast_block, source_info));
@@ -962,11 +987,15 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 );
                 block = next_block;
 
-                // Give a hint to stop the runtime at the end of the scope.
-                let end_runtime_kind =
-                    StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TapirRuntimeStop));
-                let end_runtime = Statement::new(source_info, end_runtime_kind);
-                this.cfg.push(block, end_runtime);
+                this.cfg.push(
+                    block,
+                    Statement::new(
+                        source_info,
+                        StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeEnd(
+                            taskframe,
+                        ))),
+                    ),
+                );
 
                 this.scopes.exit_sync_region();
 
