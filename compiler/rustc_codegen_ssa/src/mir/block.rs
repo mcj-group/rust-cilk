@@ -46,7 +46,7 @@ enum CallKind {
 
 enum AddParallelLoopMetadata {
     False,
-    True,
+    True { grainsize: Option<u32> },
 }
 
 /// Used by `FunctionCx::codegen_terminator` for emitting common patterns
@@ -159,7 +159,11 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         add_parallel_loop_metadata: AddParallelLoopMetadata,
     ) -> MergingSucc {
         let (needs_landing_pad, is_cleanupret) = self.llbb_characteristics(fx, target);
-        if mergeable_succ && !needs_landing_pad && !is_cleanupret {
+        if mergeable_succ
+            && matches!(add_parallel_loop_metadata, AddParallelLoopMetadata::False)
+            && !needs_landing_pad
+            && !is_cleanupret
+        {
             // We can merge the successor into this bb, so no need for a `br`.
             MergingSucc::True
         } else {
@@ -173,8 +177,8 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
                 bx.cleanup_ret(self.funclet(fx).unwrap(), Some(lltarget));
             } else {
                 let inst = bx.br(lltarget);
-                if matches!(add_parallel_loop_metadata, AddParallelLoopMetadata::True) {
-                    bx.tapir_loop_spawn_strategy_metadata(inst);
+                if let AddParallelLoopMetadata::True { grainsize } = add_parallel_loop_metadata {
+                    bx.tapir_loop_spawn_strategy_metadata(inst, grainsize);
                 }
             }
             MergingSucc::False
@@ -1506,7 +1510,17 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             mir::TerminatorKind::Goto { target } => {
                 let add_tapir_metadata = if self.parallel_back_edges.contains(bb) {
-                    AddParallelLoopMetadata::True
+                    let header = self.mir.basic_blocks[target]
+                        .parallel_loop_header()
+                        .expect("parallel back-edge target should be a parallel loop header");
+                    AddParallelLoopMetadata::True {
+                        grainsize: header.cilk_grainsize.map(|grainsize| {
+                            self.evaluate_cilk_grainsize_constant(
+                                grainsize,
+                                terminator.source_info.span,
+                            )
+                        }),
+                    }
                 } else {
                     AddParallelLoopMetadata::False
                 };

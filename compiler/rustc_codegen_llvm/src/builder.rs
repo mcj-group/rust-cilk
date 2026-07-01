@@ -841,9 +841,10 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
         self.set_metadata_node(load, llvm::MD_nonnull, &[]);
     }
 
-    fn tapir_loop_spawn_strategy_metadata(&mut self, branch: &'ll Value) {
+    fn tapir_loop_spawn_strategy_metadata(&mut self, branch: &'ll Value, grainsize: Option<u32>) {
         // NOTE(jhilton): I think we can't use llvm.loop.mustprogress since ranges can be unbounded.
         const TAPIR_LOOP_SPAWN_STRATEGY: &'static str = "tapir.loop.spawn.strategy";
+        const TAPIR_LOOP_GRAINSIZE: &'static str = "tapir.loop.grainsize";
         const LOOP_DIVIDE_AND_CONQUER: i32 = 1;
         unsafe {
             let temp = llvm::TemporaryMetadataNode::new(self.cx.llcx);
@@ -864,7 +865,22 @@ impl<'a, 'll, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'll, 'tcx> {
             );
 
             // Now group the loop with all its associated nodes and assign the node to the branch.
-            let v = [temp.as_metadata(), tapir_metadata];
+            let mut v = vec![temp.as_metadata(), tapir_metadata];
+            if let Some(grainsize) = grainsize.filter(|grainsize| *grainsize > 0) {
+                let metadata_name = llvm::LLVMMDStringInContext2(
+                    self.cx.llcx,
+                    TAPIR_LOOP_GRAINSIZE.as_ptr() as *const c_char,
+                    TAPIR_LOOP_GRAINSIZE.as_bytes().len(),
+                );
+                let metadata_value = llvm::LLVMValueAsMetadata(self.const_u32(grainsize));
+                let tapir_grainsize_metadata = [metadata_name, metadata_value];
+                let tapir_grainsize_metadata = llvm::LLVMMDNodeInContext2(
+                    self.cx.llcx,
+                    tapir_grainsize_metadata.as_ptr(),
+                    tapir_grainsize_metadata.len(),
+                );
+                v.push(tapir_grainsize_metadata);
+            }
             let node = llvm::LLVMMDNodeInContext2(self.cx.llcx, v.as_ptr(), v.len());
             // Make the node self-referential: this is what loops expect.
             llvm::LLVMRustReplaceMDOperandWith(node, 0, node);

@@ -1,8 +1,9 @@
-use rustc_abi::BackendRepr;
+use rustc_abi::{BackendRepr, Size};
 use rustc_middle::mir::interpret::ErrorHandled;
 use rustc_middle::ty::layout::{HasTyCtxt, HasTypingEnv};
 use rustc_middle::ty::{self, Ty};
 use rustc_middle::{bug, mir, span_bug};
+use rustc_span::Span;
 
 use super::FunctionCx;
 use crate::errors;
@@ -26,6 +27,26 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         self.monomorphize(constant.const_)
             .eval(self.cx.tcx(), self.cx.typing_env(), constant.span)
             .expect("erroneous constant missed by mono item collection")
+    }
+
+    pub fn evaluate_cilk_grainsize_constant(
+        &self,
+        grainsize: ty::Const<'tcx>,
+        span: Span,
+    ) -> u32 {
+        // wraps into ConstOperand and monomorphizes
+        let tcx = self.cx.tcx();
+        let constant = mir::ConstOperand {
+            span,
+            user_ty: None,
+            const_: mir::Const::Ty(tcx.types.u32, grainsize),
+        };
+        let value = self.eval_mir_constant(&constant);
+
+        // converts to u32
+        value
+            .try_to_bits(Size::from_bytes(4))
+            .expect("cilk grainsize should evaluate to a u32") as u32
     }
 
     /// This is a convenience helper for `immediate_const_vector`. It has the precondition
