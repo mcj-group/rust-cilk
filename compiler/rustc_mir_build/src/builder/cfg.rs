@@ -28,7 +28,7 @@ impl<'tcx> CFG<'tcx> {
         cilk_grainsize: Option<rustc_middle::ty::Const<'tcx>>,
     ) -> BasicBlock {
         let mut block_data = BasicBlockData::new(None, false);
-        block_data.is_parallel_loop_header = Some(ParallelLoopHeader { cilk_grainsize });
+        block_data.set_parallel_loop_header(ParallelLoopHeader::new(cilk_grainsize));
         self.basic_blocks.push(block_data)
     }
 

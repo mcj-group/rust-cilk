@@ -270,6 +270,7 @@ impl<'tcx> BorrowExplanation<'tcx> {
                                     _,
                                     hir::LoopSource::While,
                                     _,
+                                    _,
                                 ) = expr.kind
                                     && let hir::ExprKind::Let(hir::LetExpr {
                                         init: let_expr_init,

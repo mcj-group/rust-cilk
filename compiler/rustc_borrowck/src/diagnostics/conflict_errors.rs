@@ -400,7 +400,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                             // ```
                             break;
                         }
-                        if let hir::ExprKind::Loop(.., loop_span) = expr.kind {
+                        if let hir::ExprKind::Loop(.., loop_span, _) = expr.kind {
                             err.span_label(loop_span, "inside of this loop");
                         }
                     }
@@ -2381,6 +2381,7 @@ impl<'infcx, 'tcx> MirBorrowckCtxt<'_, 'infcx, 'tcx> {
                     hir::Block { stmts: [stmt, ..], .. },
                     _,
                     hir::LoopSource::ForLoop,
+                    _,
                     _,
                 ) = ex.kind
                     && let hir::StmtKind::Expr(hir::Expr {

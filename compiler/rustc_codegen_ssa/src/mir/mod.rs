@@ -344,7 +344,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
             if let mir::TerminatorKind::Goto { target } = bb_data.terminator().kind {
                 // If the target of the jump is a parallel loop header and we've already observed
                 // it, we know this must be a loop back-edge.
-                if mir.basic_blocks[target].is_parallel_loop_header.is_some() && seen.contains(&target) {
+                if mir.basic_blocks[target].is_parallel_loop() && seen.contains(&target) {
                     return Some(bb);
                 }
             }

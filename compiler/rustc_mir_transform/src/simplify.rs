@@ -202,16 +202,17 @@ impl<'a, 'tcx> CfgSimplifier<'a, 'tcx> {
                     // self.pred_count[old_successor] == 0 since we should instead observe
                     // that all calls to collapse_goto_chain behave similarly on the same
                     // initial successor.
-
-                    let should_make_successor_parallel_loop_header = new_successor != old_successor
+                    
+                    if new_successor != old_successor
                         && self.pred_count[old_successor] == 0
-                        && self.basic_blocks[old_successor].is_parallel_loop_header;
-                    if should_make_successor_parallel_loop_header {
+                        && let Some(parallel_loop_header) = self.basic_blocks[old_successor].parallel_loop_header()
+                    {
                         debug!(
                             "making {:?} a new parallel loop header from {:?}",
                             new_successor, old_successor
                         );
-                        self.basic_blocks[new_successor].is_parallel_loop_header = true;
+                        self.basic_blocks[new_successor]
+                            .set_parallel_loop_header(parallel_loop_header);
                     }
                 }
 

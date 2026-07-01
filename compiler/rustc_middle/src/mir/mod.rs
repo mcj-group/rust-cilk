@@ -1313,7 +1313,7 @@ pub struct BasicBlockData<'tcx> {
 
     /// If `Some`, this block is the loop header of a parallel loop. The payload stores metadata
     /// attached to that header for codegen.
-    pub is_parallel_loop_header: Option<ParallelLoopHeader<'tcx>>,
+    pub parallel_loop_header: Option<ParallelLoopHeader<'tcx>>,
 }
 
 impl<'tcx> BasicBlockData<'tcx> {
@@ -1332,9 +1332,21 @@ impl<'tcx> BasicBlockData<'tcx> {
             after_last_stmt_debuginfos: StmtDebugInfos::default(),
             terminator,
             is_cleanup,
-            is_parallel_loop_header: is_parallel_loop_header
-                .then_some(ParallelLoopHeader { cilk_grainsize: None }),
+            parallel_loop_header: is_parallel_loop_header
+                .then_some(ParallelLoopHeader::new(None)),
         }
+    }
+
+    pub fn is_parallel_loop(&self) -> bool {
+        self.parallel_loop_header.is_some()
+    }
+
+    pub fn parallel_loop_header(&self) -> Option<ParallelLoopHeader<'tcx>> {
+        self.parallel_loop_header
+    }
+
+    pub fn set_parallel_loop_header(&mut self, header: ParallelLoopHeader<'tcx>) {
+        self.parallel_loop_header = Some(header);
     }
 
     /// Accessor for terminator.
@@ -1405,6 +1417,12 @@ impl<'tcx> BasicBlockData<'tcx> {
 pub struct ParallelLoopHeader<'tcx> {
     /// Optional grainsize attached to `cilk_for` by `#[cilk_grainsize(...)]`.
     pub cilk_grainsize: Option<ty::Const<'tcx>>,
+}
+
+impl<'tcx> ParallelLoopHeader<'tcx> {
+    pub fn new(cilk_grainsize: Option<ty::Const<'tcx>>) -> Self {
+        ParallelLoopHeader { cilk_grainsize }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////
