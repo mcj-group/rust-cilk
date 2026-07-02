@@ -321,17 +321,6 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
     // Apply debuginfo to the newly allocated locals.
     fx.debug_introduce_locals(&mut start_bx, consts_debug_info.unwrap_or_default());
 
-    let uses_cilk_control_flow = || {
-        mir.basic_blocks.iter().any(|bb| {
-            matches!(
-                bb.terminator().kind,
-                mir::TerminatorKind::Detach { .. }
-                    | mir::TerminatorKind::Reattach { .. }
-                    | mir::TerminatorKind::Sync { .. }
-            )
-        })
-    };
-
     let parallel_back_edges = || {
         let mut seen = rustc_data_structures::fx::FxHashSet::default();
         mir::traversal::reverse_postorder(mir).filter_map(move |(bb, bb_data)| {
@@ -347,7 +336,7 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         })
     };
 
-    if Bx::supports_tapir() && uses_cilk_control_flow() {
+    if Bx::supports_tapir() {
         //  && !fx.mir.orphaning
 
         // Let's figure out the parallel back-edges. These are edges into parallel

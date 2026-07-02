@@ -529,6 +529,9 @@ pub enum NonDivergingIntrinsic<'tcx> {
     TaskframeEnd(Taskframe),
 
     TapirSyncRegionStart(SyncRegion),
+
+    /// Inserted in the parent function to indicate the syncregion that the child's root syncregion should be mapped to
+    OrphaningSyncregion(SyncRegion),
 }
 
 /// Describes what kind of retag is to be performed.

@@ -528,6 +528,9 @@ impl<'tcx> Stable<'tcx> for mir::NonDivergingIntrinsic<'tcx> {
             NonDivergingIntrinsic::TapirSyncRegionStart(sync_region) => {
                 crate::mir::NonDivergingIntrinsic::TapirSyncRegionStart(*sync_region)
             }
+            NonDivergingIntrinsic::OrphaningSyncregion(sync_region) => {
+                crate::mir::NonDivergingIntrinsic::OrphaningSyncregion(*sync_region)
+            }
         }
     }
 }

@@ -702,6 +702,7 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse(_))
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeEnd(_))
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirSyncRegionStart(_))
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::OrphaningSyncregion(_))
             | StatementKind::FakeRead(..)
             | StatementKind::StorageLive(..)
             | StatementKind::StorageDead(..)

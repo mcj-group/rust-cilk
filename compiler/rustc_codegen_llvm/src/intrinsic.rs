@@ -822,10 +822,7 @@ impl<'ll, 'tcx> IntrinsicCallBuilderMethods<'tcx> for Builder<'_, 'll, 'tcx> {
         self.call_intrinsic("llvm.syncregion.start", &[], &[])
     }
 
-    fn orphaning_syncregion(&mut self, token: &'ll Value, bb: &Self::BasicBlock) {
-        unsafe {
-            llvm::LLVMPositionBuilderAtEnd(self.llbuilder, bb);
-        }
+    fn orphaning_syncregion(&mut self, token: &'ll Value) {
         self.call_intrinsic("llvm.orphaning.syncregion", &[], &[token]);
     }
 

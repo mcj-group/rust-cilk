@@ -873,6 +873,7 @@ impl Display for NonDivergingIntrinsic<'_> {
             Self::TaskframeUse(taskframe) => write!(f, "taskframe_use({taskframe:?})"),
             Self::TaskframeEnd(taskframe) => write!(f, "taskframe_end({taskframe:?})"),
             Self::TapirSyncRegionStart(sync_region) => write!(f, "tapir_sr_start({sync_region:?})"),
+            Self::OrphaningSyncregion(sync_region) => write!(f, "orphaning_sr({sync_region:?})"),
         }
     }
 }
