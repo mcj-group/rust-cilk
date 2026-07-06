@@ -150,6 +150,37 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         )
     }
 
+    fn funclet_br_maybe_add_parallel_loop_metadata<Bx: BuilderMethods<'a, 'tcx>>(
+        &self,
+        fx: &mut FunctionCx<'a, 'tcx, Bx>,
+        bx: &mut Bx,
+        target: mir::BasicBlock,
+        mergeable_succ: bool,
+    ) -> MergingSucc {
+        // NOTE(jhilton): we attach the metadata to the parallel loop back edge.
+        // This is because in the structure of a loop, the back edge is more
+        // fundamental than the header and because the way LLVM detects loop metadata
+        // is by canonicalizing then checking the back edge. By adding the metadata to
+        // the back edge, we don't rely on the canonicalization succeeding, so it's a
+        // little less fragile (although I expect the canonicalization is very robust).
+        //
+        // A `cilk_for` back edge is a `Call` terminator (the loop body is lowered to a
+        // closure call), so this helper is used for both `Goto` and `Call` back edges.
+        let add_parallel_loop_metadata = if fx.parallel_back_edges.contains(self.bb) {
+            AddParallelLoopMetadata::True
+        } else {
+            AddParallelLoopMetadata::False
+        };
+
+        self.funclet_br_maybe_add_metadata(
+            fx,
+            bx,
+            target,
+            mergeable_succ,
+            add_parallel_loop_metadata,
+        )
+    }
+
     fn funclet_br_maybe_add_metadata<Bx: BuilderMethods<'a, 'tcx>>(
         &self,
         fx: &mut FunctionCx<'a, 'tcx, Bx>,
@@ -311,7 +342,7 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
                     bx.lifetime_end(tmp, size);
                 }
                 fx.store_return(bx, ret_dest, &fn_abi.ret, llret);
-                self.funclet_br(fx, bx, target, mergeable_succ)
+                self.funclet_br_maybe_add_parallel_loop_metadata(fx, bx, target, mergeable_succ)
             } else {
                 bx.unreachable();
                 MergingSucc::False
@@ -1490,23 +1521,11 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
 
             mir::TerminatorKind::Goto { target } => {
-                let add_tapir_metadata = if self.parallel_back_edges.contains(bb) {
-                    AddParallelLoopMetadata::True
-                } else {
-                    AddParallelLoopMetadata::False
-                };
-                // NOTE(jhilton): we attach the metadata to the parallel loop back edge.
-                // This is because in the structure of a loop, the back edge is more
-                // fundamental than the header and because the way LLVM detects loop metadata
-                // is by canonicalizing then checking the back edge. By adding the metadata to
-                // the back edge, we don't rely on the canonicalization succeeding, so it's a
-                // little less fragile (although I expect the canonicalization is very robust).
-                helper.funclet_br_maybe_add_metadata(
+                helper.funclet_br_maybe_add_parallel_loop_metadata(
                     self,
                     bx,
                     target,
                     mergeable_succ(),
-                    add_tapir_metadata,
                 )
             }
 

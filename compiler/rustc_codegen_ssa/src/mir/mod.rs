@@ -325,13 +325,21 @@ pub fn codegen_mir<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>>(
         let mut seen = rustc_data_structures::fx::FxHashSet::default();
         mir::traversal::reverse_postorder(mir).filter_map(move |(bb, bb_data)| {
             seen.insert(bb);
-            if let mir::TerminatorKind::Goto { target } = bb_data.terminator().kind {
-                // If the target of the jump is a parallel loop header and we've already observed
-                // it, we know this must be a loop back-edge.
+
+            let target = match bb_data.terminator().kind {
+                mir::TerminatorKind::Goto { target } => Some(target),
+                mir::TerminatorKind::Call { target, .. } => target,
+                _ => None,
+            };
+
+            // If the target successor is a parallel loop header and we've already observed
+            // it, we know this must be a loop back-edge.
+            if let Some(target) = target {
                 if mir.basic_blocks[target].is_parallel_loop_header && seen.contains(&target) {
                     return Some(bb);
                 }
             }
+
             None
         })
     };
