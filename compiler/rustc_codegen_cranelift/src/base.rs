@@ -590,6 +590,7 @@ fn codegen_fn_body(fx: &mut FunctionCx<'_, '_, '_>, start_block: Block) {
                 let drop_place = codegen_place(fx, *place);
                 crate::abi::codegen_drop(fx, source_info, drop_place, *target, *unwind);
             }
+            _ => todo!()
         };
     }
 }
@@ -939,6 +940,7 @@ fn codegen_stmt<'tcx>(fx: &mut FunctionCx<'_, '_, 'tcx>, cur_block: Block, stmt:
                 };
                 fx.bcx.call_memcpy(fx.target_config, dst, src, bytes);
             }
+            _ => todo!()
         },
     }
 }

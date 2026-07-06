@@ -1134,13 +1134,6 @@ impl<'a, 'gcc, 'tcx> BuilderMethods<'a, 'tcx> for Builder<'a, 'gcc, 'tcx> {
         // TODO(antoyo)
     }
 
-    fn tapir_loop_spawn_strategy_metadata(
-        &mut self,
-        _branch: RValue<'gcc>,
-        _grainsize: Option<u32>,
-    ) {
-    }
-
     fn store(&mut self, val: RValue<'gcc>, ptr: RValue<'gcc>, align: Align) -> RValue<'gcc> {
         self.store_with_flags(val, ptr, align, MemFlags::empty())
     }

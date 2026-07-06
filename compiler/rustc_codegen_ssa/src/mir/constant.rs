@@ -44,9 +44,8 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
         let value = self.eval_mir_constant(&constant);
 
         // converts to u32
-        value
-            .try_to_bits(Size::from_bytes(4))
-            .expect("cilk grainsize should evaluate to a u32") as u32
+        value.try_to_bits(Size::from_bytes(4))
+             .expect("cilk grainsize should evaluate to a u32") as u32
     }
 
     /// This is a convenience helper for `immediate_const_vector`. It has the precondition

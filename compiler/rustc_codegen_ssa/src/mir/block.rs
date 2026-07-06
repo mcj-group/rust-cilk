@@ -150,6 +150,38 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
         )
     }
 
+    fn funclet_br_maybe_add_parallel_loop_metadata<Bx: BuilderMethods<'a, 'tcx>>(
+        &self,
+        fx: &mut FunctionCx<'a, 'tcx, Bx>,
+        bx: &mut Bx,
+        target: mir::BasicBlock,
+        mergeable_succ: bool,
+    ) -> MergingSucc {
+        let add_parallel_loop_metadata = if fx.parallel_back_edges.contains(self.bb) {
+            let header = fx.mir.basic_blocks[target]
+                .parallel_loop_header()
+                .expect("parallel back-edge target should be a parallel loop header");
+            AddParallelLoopMetadata::True {
+                grainsize: header.cilk_grainsize.map(|grainsize| {
+                    fx.evaluate_cilk_grainsize_constant(
+                        grainsize,
+                        self.terminator.source_info.span,
+                    )
+                }),
+            }
+        } else {
+            AddParallelLoopMetadata::False
+        };
+
+        self.funclet_br_maybe_add_metadata(
+            fx,
+            bx,
+            target,
+            mergeable_succ,
+            add_parallel_loop_metadata,
+        )
+    }
+
     fn funclet_br_maybe_add_metadata<Bx: BuilderMethods<'a, 'tcx>>(
         &self,
         fx: &mut FunctionCx<'a, 'tcx, Bx>,
@@ -315,7 +347,12 @@ impl<'a, 'tcx> TerminatorCodegenHelper<'tcx> {
                     bx.lifetime_end(tmp, size);
                 }
                 fx.store_return(bx, ret_dest, &fn_abi.ret, llret);
-                self.funclet_br(fx, bx, target, mergeable_succ)
+                self.funclet_br_maybe_add_parallel_loop_metadata(
+                    fx,
+                    bx,
+                    target,
+                    mergeable_succ,
+                )
             } else {
                 bx.unreachable();
                 MergingSucc::False
@@ -1500,33 +1537,17 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             }
 
             mir::TerminatorKind::Goto { target } => {
-                let add_tapir_metadata = if self.parallel_back_edges.contains(bb) {
-                    let header = self.mir.basic_blocks[target]
-                        .parallel_loop_header()
-                        .expect("parallel back-edge target should be a parallel loop header");
-                    AddParallelLoopMetadata::True {
-                        grainsize: header.cilk_grainsize.map(|grainsize| {
-                            self.evaluate_cilk_grainsize_constant(
-                                grainsize,
-                                terminator.source_info.span,
-                            )
-                        }),
-                    }
-                } else {
-                    AddParallelLoopMetadata::False
-                };
                 // NOTE(jhilton): we attach the metadata to the parallel loop back edge.
                 // This is because in the structure of a loop, the back edge is more
                 // fundamental than the header and because the way LLVM detects loop metadata
                 // is by canonicalizing then checking the back edge. By adding the metadata to
                 // the back edge, we don't rely on the canonicalization succeeding, so it's a
                 // little less fragile (although I expect the canonicalization is very robust).
-                helper.funclet_br_maybe_add_metadata(
+                helper.funclet_br_maybe_add_parallel_loop_metadata(
                     self,
                     bx,
                     target,
                     mergeable_succ(),
-                    add_tapir_metadata,
                 )
             }
 

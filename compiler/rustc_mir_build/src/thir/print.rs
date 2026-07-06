@@ -325,8 +325,17 @@ impl<'a, 'tcx> ThirPrinter<'a, 'tcx> {
                 self.print_expr(*source, depth_lvl + 2);
                 print_indented!(self, "}", depth_lvl);
             }
-            Loop { body, tapir_loop_spawn: _, cilk_grainsize: _ } => {
+            Loop { body, tapir_loop_spawn, cilk_grainsize } => {
                 print_indented!(self, "Loop (", depth_lvl);
+                print_indented!(self, format!("tapir_loop_spawn: {:?}", tapir_loop_spawn), depth_lvl + 1);
+                print_indented!(
+                    self,
+                    format!("cilk_grainsize: {}", cilk_grainsize.map_or_else(
+                        || "None".to_string(),
+                        |c| format!("{:?}", c),
+                    )),
+                    depth_lvl + 1
+                );
                 print_indented!(self, "body:", depth_lvl + 1);
                 self.print_expr(*body, depth_lvl + 2);
                 print_indented!(self, ")", depth_lvl);

@@ -1962,7 +1962,13 @@ impl<'hir> LoweringContext<'_, 'hir> {
             let body_expr = if let ForLoopKind::CilkFor(cilk_closure_node_id) = loop_kind {
                 let induction_var_ident = match &ast_pat.kind {
                     PatKind::Ident(_bind, ident, _other) => *ident,
-                    _ => unreachable!(), // FIXME(CAIATHEN) will this ever happen?
+                    _ => {
+                        let guar = self.dcx().has_errors().unwrap_or_else(|| {
+                            self.dcx().span_err(ast_pat.span, "expected an identifier in `cilk_for`")
+                        });
+
+                        return self.expr(e.span, hir::ExprKind::Err(guar));
+                    }
                 };
 
                 // create NodeId and Ident for shadowing variable
