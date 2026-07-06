@@ -37,6 +37,7 @@ use rustc_infer::infer::{InferCtxt, TyCtxtInferExt};
 use rustc_middle::hir::place::PlaceBase as HirPlaceBase;
 use rustc_middle::middle::region;
 use rustc_middle::mir::*;
+use rustc_middle::thir::visit::{self as thir_visit, Visitor};
 use rustc_middle::thir::{self, ExprId, LocalVarId, Param, ParamId, PatKind, Thir};
 use rustc_middle::ty::{self, ScalarInt, Ty, TyCtxt, TypeVisitableExt, TypingMode};
 use rustc_middle::{bug, span_bug};
@@ -464,6 +465,40 @@ macro_rules! unpack {
     }};
 }
 
+/// Returns `true` if `expr` contains a `cilk_for` loop, or a `cilk_spawn`,
+/// `cilk_scope`, or `cilk_sync` expression anywhere within it.
+fn contains_cilk_construct<'tcx>(thir: &Thir<'tcx>, expr: ExprId) -> bool {
+    struct CilkConstructVisitor<'a, 'tcx> {
+        thir: &'a Thir<'tcx>,
+        found: bool,
+    }
+
+    impl<'a, 'tcx> Visitor<'a, 'tcx> for CilkConstructVisitor<'a, 'tcx> {
+        fn thir(&self) -> &'a Thir<'tcx> {
+            self.thir
+        }
+
+        fn visit_expr(&mut self, expr: &'a thir::Expr<'tcx>) {
+            if self.found {
+                return;
+            }
+            match expr.kind {
+                thir::ExprKind::CilkSpawn { .. }
+                | thir::ExprKind::CilkScope { .. }
+                | thir::ExprKind::CilkSync
+                | thir::ExprKind::Loop { tapir_loop_spawn: true, .. } => {
+                    self.found = true;
+                }
+                _ => thir_visit::walk_expr(self, expr),
+            }
+        }
+    }
+
+    let mut visitor = CilkConstructVisitor { thir, found: false };
+    visitor.visit_expr(&thir[expr]);
+    visitor.found
+}
+
 /// The main entry point for building MIR for a function.
 fn construct_fn<'tcx>(
     tcx: TyCtxt<'tcx>,
@@ -543,7 +578,9 @@ fn construct_fn<'tcx>(
         region::Scope { local_id: body.id().hir_id.local_id, data: region::ScopeData::Arguments };
     let source_info = builder.source_info(span);
 
-    builder.create_sync_region(START_BLOCK, source_info);
+    if contains_cilk_construct(thir, expr) {
+        builder.create_sync_region(START_BLOCK, source_info);
+    }
 
     let call_site_s = (call_site_scope, source_info);
     let _: BlockAnd<()> = builder.in_scope(call_site_s, LintLevel::Inherited, |builder| {
