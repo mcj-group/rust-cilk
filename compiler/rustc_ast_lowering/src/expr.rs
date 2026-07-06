@@ -2359,7 +2359,15 @@ impl<'hir> LoweringContext<'_, 'hir> {
         // Also, add the attributes to the outer returned expr node.
         let expr = self.expr_drop_temps_mut(for_span, match_expr);
         self.lower_attrs(expr.hir_id, &e.attrs, e.span, Target::from_expr(e));
-        expr
+
+        if let ForLoopKind::CilkFor(_) = loop_kind {
+            // wrap cilk_for loop in cilk_scope so it gets its own sync region
+            let expr_span = expr.span;
+            let block = self.block_expr(self.arena.alloc(expr));
+            self.expr(expr_span, hir::ExprKind::CilkScope(block))
+        } else {
+            expr
+        }
     }
 
     /// Desugar `ExprKind::Try` from: `<expr>?` into:

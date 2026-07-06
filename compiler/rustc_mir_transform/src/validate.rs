@@ -1558,7 +1558,8 @@ impl<'a, 'tcx> Visitor<'tcx> for TypeChecker<'a, 'tcx> {
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate(_))
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeUse(_))
             | StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeEnd(_))
-            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirSyncRegionStart(_)) => {}
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirSyncRegionStart(_))
+            | StatementKind::Intrinsic(box NonDivergingIntrinsic::OrphaningSyncregion(_)) => {}
             StatementKind::SetDiscriminant { place, .. } => {
                 if self.body.phase < MirPhase::Runtime(RuntimePhase::Initial) {
                     self.fail(location, "`SetDiscriminant`is not allowed until deaggregation");

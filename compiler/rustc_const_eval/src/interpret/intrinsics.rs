@@ -839,7 +839,8 @@ impl<'tcx, M: Machine<'tcx>> InterpCx<'tcx, M> {
             | NonDivergingIntrinsic::TaskframeCreate(_)
             | NonDivergingIntrinsic::TaskframeUse(_)
             | NonDivergingIntrinsic::TaskframeEnd(_)
-            | NonDivergingIntrinsic::TapirSyncRegionStart(_) => interp_ok(()),
+            | NonDivergingIntrinsic::TapirSyncRegionStart(_)
+            | NonDivergingIntrinsic::OrphaningSyncregion(_) => interp_ok(()),
         }
     }
 

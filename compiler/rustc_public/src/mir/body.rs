@@ -489,6 +489,7 @@ pub enum NonDivergingIntrinsic {
     TaskframeUse(Taskframe),
     TaskframeEnd(Taskframe),
     TapirSyncRegionStart(SyncRegion),
+    OrphaningSyncregion(SyncRegion),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

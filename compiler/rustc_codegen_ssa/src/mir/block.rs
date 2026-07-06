@@ -1456,12 +1456,6 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
 
             debug!("codegen_block({:?}={:?})", bb, data);
 
-            // LLVM InlineFunction should replace sync region of the orphaning function with the parent sync region
-            if self.parallel_back_edges.contains(bb) {
-                todo!();
-                // bx.orphaning_syncregion(*self.sync_region, &llbb);
-            }
-
             for statement in &data.statements {
                 self.codegen_statement(bx, statement);
             }

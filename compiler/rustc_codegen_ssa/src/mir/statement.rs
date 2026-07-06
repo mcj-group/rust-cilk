@@ -108,6 +108,16 @@ impl<'a, 'tcx, Bx: BuilderMethods<'a, 'tcx>> FunctionCx<'a, 'tcx, Bx> {
             )) => {
                 self.sync_region_map.insert(sync_region, bx.sync_region_start());
             }
+            mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::OrphaningSyncregion(
+                sync_region,
+            )) => {
+                bx.orphaning_syncregion(
+                    *self
+                        .sync_region_map
+                        .get(&sync_region)
+                        .expect("cannot find orphaning sync region"),
+                );
+            }
             mir::StatementKind::Intrinsic(box NonDivergingIntrinsic::TaskframeCreate(
                 taskframe,
             )) => {
