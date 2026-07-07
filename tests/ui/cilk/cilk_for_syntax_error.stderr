@@ -1,0 +1,24 @@
+error: missing `in` in `for` loop
+  --> $DIR/cilk_for_syntax_error.rs:8:19
+   |
+LL |     cilk_for 1..10{}
+   |                   ^
+   |
+help: try adding `in` here
+   |
+LL |     cilk_for 1..10 in {}
+   |                    ++
+
+error: missing expression to iterate on in `for` loop
+  --> $DIR/cilk_for_syntax_error.rs:8:19
+   |
+LL |     cilk_for 1..10{}
+   |                   ^
+   |
+help: try adding an expression to the `for` loop
+   |
+LL |     cilk_for 1..10/* expression */ {}
+   |                   ++++++++++++++++
+
+error: aborting due to 2 previous errors
+
