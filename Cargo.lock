@@ -4247,6 +4247,7 @@ dependencies = [
  "rustc_target",
  "rustc_thread_pool",
  "rustc_type_ir",
+ "serde",
  "smallvec",
  "thin-vec",
  "tracing",
