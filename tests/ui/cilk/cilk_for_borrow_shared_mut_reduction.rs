@@ -11,13 +11,14 @@
 // than a crash. Tracked as a known-bug until cilk_for bodies are
 // borrow-checked against the parent's continuation.
 
-//@ known-bug: unknown
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
 
 fn main() {
     let mut max = 4;
     cilk_for i in 0..1000 {
+                    //~^ ERROR cannot borrow `max` as mutable more than once at a time [E0499]
+                    //~| ERROR temporary value dropped while borrowed [E0716]
         if max < i {
             max = i;
         }

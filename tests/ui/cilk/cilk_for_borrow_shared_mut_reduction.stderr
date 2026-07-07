@@ -1,0 +1,33 @@
+error[E0499]: cannot borrow `max` as mutable more than once at a time
+  --> $DIR/cilk_for_borrow_shared_mut_reduction.rs:19:27
+   |
+LL |       cilk_for i in 0..1000 {
+   |  ___________________________^
+LL | |
+LL | |
+LL | |         if max < i {
+LL | |             max = i;
+   | |             --- borrows occur due to use of `max` in closure
+LL | |         }
+LL | |     }
+   | |_____^ `max` was mutably borrowed here in the previous iteration of the loop
+
+error[E0716]: temporary value dropped while borrowed
+  --> $DIR/cilk_for_borrow_shared_mut_reduction.rs:19:27
+   |
+LL |       cilk_for i in 0..1000 {
+   |  ___________________________^
+LL | |
+LL | |
+LL | |         if max < i {
+...  |
+LL | |     }
+   | |     ^
+   | |     |
+   | |_____temporary value is freed at the end of this statement
+   |       creates a temporary value which is freed while still in use
+
+error: aborting due to 2 previous errors
+
+Some errors have detailed explanations: E0499, E0716.
+For more information about an error, try `rustc --explain E0499`.

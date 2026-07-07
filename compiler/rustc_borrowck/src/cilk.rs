@@ -161,13 +161,6 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
                 && let BorrowKind::Mut { .. } = bw.kind
             {
                 regions.insert(bw.region);
-                for i in 0..body.basic_blocks[orphaning_call_block].statements.len() {
-                    let live = constraints.liveness_constraints.is_live_at(
-                        bw.region,
-                        Location { block: orphaning_call_block, statement_index: i },
-                    );
-                    println!("{i} {live}");
-                }
             }
         }
         if regions.is_empty() {
