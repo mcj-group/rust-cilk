@@ -9,11 +9,9 @@
 // EXPECTED: rejected with E0499, exactly as the nested-loop sibling
 // `cilk_for_for.rs` already is.
 //
-// CURRENT BEHAVIOR: the compiler wrongly *accepts* the flat single-write form
-// (it compiles clean), so this test currently fails with "expected error not
-// found". It flips to passing once cilk_for bodies are borrow-checked against
-// the parent's continuation. The safe ways to express disjoint writes are
-// `split_at_mut` or raw pointers (see cilk_for_raw_ptr_write.rs).
+// CURRENT BEHAVIOR: the compiler emits extra [E0716] error together 
+// at the cilk_for span. It also emits some diagnostics to stdout. These
+// would be removed in the future.
 
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
@@ -21,8 +19,9 @@
 fn main() {
     let mut v = vec![0; 5];
     cilk_for i in 0..5 {
+                    //~^ ERROR cannot borrow `v` as mutable more than once at a time [E0499]
+                    //~| ERROR temporary value dropped while borrowed [E0716]
         v[i] = 1;
-        //~^ ERROR cannot borrow `v` as mutable more than once at a time [E0499]
     }
     println!("{:?}", v);
 }

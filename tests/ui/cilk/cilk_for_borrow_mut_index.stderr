@@ -1,0 +1,30 @@
+error[E0499]: cannot borrow `v` as mutable more than once at a time
+  --> $DIR/cilk_for_borrow_mut_index.rs:21:24
+   |
+LL |       cilk_for i in 0..5 {
+   |  ________________________^
+LL | |
+LL | |
+LL | |         v[i] = 1;
+   | |         - borrows occur due to use of `v` in closure
+LL | |     }
+   | |_____^ `v` was mutably borrowed here in the previous iteration of the loop
+
+error[E0716]: temporary value dropped while borrowed
+  --> $DIR/cilk_for_borrow_mut_index.rs:21:24
+   |
+LL |       cilk_for i in 0..5 {
+   |  ________________________^
+LL | |
+LL | |
+LL | |         v[i] = 1;
+LL | |     }
+   | |     ^
+   | |     |
+   | |_____temporary value is freed at the end of this statement
+   |       creates a temporary value which is freed while still in use
+
+error: aborting due to 2 previous errors
+
+Some errors have detailed explanations: E0499, E0716.
+For more information about an error, try `rustc --explain E0499`.
