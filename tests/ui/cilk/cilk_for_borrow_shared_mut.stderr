@@ -1,0 +1,16 @@
+error[E0499]: cannot borrow `max` as mutable more than once at a time
+  --> $DIR/cilk_for_borrow_shared_mut.rs:18:27
+   |
+LL |       cilk_for i in 0..1000 {
+   |  ___________________________^
+LL | |
+LL | |         if max < i {
+LL | |             max = i;
+   | |             --- borrows occur due to use of `max` in closure
+LL | |         }
+LL | |     }
+   | |_____^ `max` was mutably borrowed here in the previous iteration of the loop
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0499`.
