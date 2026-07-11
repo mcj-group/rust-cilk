@@ -33,7 +33,7 @@ use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
 use rustc_middle::mir::{
-    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, Location, TerminatorKind,
+    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, LocalInfo, Location, TerminatorKind,
 };
 use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
@@ -160,14 +160,16 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
             if bw.reserve_location.block == orphaning_call_block
                 && let BorrowKind::Mut { .. } = bw.kind
             {
-                regions.insert(bw.region);
-                for i in 0..body.basic_blocks[orphaning_call_block].statements.len() {
-                    let live = constraints.liveness_constraints.is_live_at(
-                        bw.region,
-                        Location { block: orphaning_call_block, statement_index: i },
-                    );
-                    println!("{i} {live}");
+                let local_decl = &body.local_decls[bw.borrowed_place.local];
+
+                // skips mutable borrow created to call the orphaning closure
+                if matches!(local_decl.local_info(), LocalInfo::Boring)
+                    && matches!(local_decl.ty.kind(), ty::Closure(..))
+                {
+                    continue;
                 }
+
+                regions.insert(bw.region);
             }
         }
         if regions.is_empty() {
