@@ -915,11 +915,14 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         ))),
                     ),
                 );
-                this.create_sync_region(spawned_task, source_info);
 
                 this.scopes.reattach_targets.push(reattach_block);
-                let spawned_result =
-                    unpack!(spawned_task = this.as_local_rvalue(spawned_task, computation));
+                let spawned_result = unpack!(
+                    spawned_task = this.in_sync_region(
+                        |builder| { builder.as_local_rvalue(spawned_task, computation) },
+                        true
+                    )
+                );
                 this.scopes.reattach_targets.pop();
 
                 // Store the spawned result into the destination before reattaching.
@@ -929,7 +932,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 let task_source_info = this.source_info(task_span);
                 this.cfg.goto(spawned_task, task_source_info, reattach_block);
                 // TODO: not sure what to put here for source_info
-                this.scopes.exit_sync_region();
                 this.cfg.terminate(
                     reattach_block,
                     task_source_info,
@@ -955,20 +957,13 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     ),
                 );
 
-                this.create_sync_region(block, source_info);
-
                 // Generate the code for the block and end it in a sync.
-                unpack!(block = this.ast_block(destination, block, ast_block, source_info));
-                let next_block = this.cfg.start_new_block();
-                this.cfg.terminate(
-                    block,
-                    source_info,
-                    TerminatorKind::Sync {
-                        sync_region: this.scopes.current_sync_region(),
-                        target: next_block,
-                    },
+                unpack!(
+                    block = this.in_sync_region(
+                        |builder| { builder.ast_block(destination, block, ast_block, source_info) },
+                        true
+                    )
                 );
-                block = next_block;
 
                 this.cfg.push(
                     block,
@@ -979,8 +974,6 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                         ))),
                     ),
                 );
-
-                this.scopes.exit_sync_region();
 
                 block.unit()
             }

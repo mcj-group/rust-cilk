@@ -119,7 +119,7 @@ pub(crate) struct Scopes<'tcx> {
     // TODO: make private?
     pub reattach_targets: Vec<BasicBlock>,
 
-    sync_regions: Vec<SyncRegion>,
+    pub sync_regions: Vec<SyncRegionState>,
     next_sync_region: u32,
 
     next_taskframe: u32,
@@ -486,6 +486,20 @@ impl DropTree {
     }
 }
 
+/// Tracks the creation of sync regions
+#[derive(Debug)]
+pub(crate) enum SyncRegionState {
+    /// A construct has been entered that requires a sync region, but it has not yet been added to the MIR
+    Declared,
+    /// A construct has been entered that requires a sync region, which shouldn't sync automatically, but it has not yet
+    /// been added to the MIR
+    DeclaredWithoutSync,
+    /// A sync region which has been added the MIR
+    Instatiated(SyncRegion),
+    /// A sync region which has been declared, but not added to the MIR as it's not needed
+    Ignored,
+}
+
 impl<'tcx> Scopes<'tcx> {
     pub(crate) fn new() -> Self {
         Self {
@@ -535,16 +549,20 @@ impl<'tcx> Scopes<'tcx> {
 
     pub(crate) fn enter_sync_region(&mut self) {
         let sync_region = SyncRegion::from_u32(self.next_sync_region);
-        self.sync_regions.push(sync_region);
+        let top = self.sync_regions.last_mut().expect("setting to empty sync region stack");
+        assert!(matches!(top, SyncRegionState::Declared | SyncRegionState::DeclaredWithoutSync));
+        *top = SyncRegionState::Instatiated(sync_region);
         self.next_sync_region += 1;
     }
 
     pub(crate) fn current_sync_region(&self) -> SyncRegion {
-        *self.sync_regions.last().expect("no usable sync regions")
-    }
-
-    pub(crate) fn exit_sync_region(&mut self) {
-        self.sync_regions.pop();
+        if let SyncRegionState::Instatiated(sync_region) =
+            self.sync_regions.last().expect("no usable sync regions")
+        {
+            return *sync_region;
+        } else {
+            panic!("uninitialized sync region");
+        }
     }
 
     pub(crate) fn get_taskframe(&mut self) -> Taskframe {
@@ -749,6 +767,24 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         } else {
             f(self)
         }
+    }
+
+    /// Doesn't create the sync region immediately
+    /// The first block created within f (that isn't inside another sync region) will instantiate a sync region and sync
+    /// it at the end of the block before drops (see `ast_block_stmts`)
+    pub(crate) fn in_sync_region<R>(
+        &mut self,
+        f: impl FnOnce(&mut Builder<'a, 'tcx>) -> BlockAnd<R>,
+        should_sync: bool,
+    ) -> BlockAnd<R> {
+        self.scopes.sync_regions.push(if should_sync {
+            SyncRegionState::Declared
+        } else {
+            SyncRegionState::DeclaredWithoutSync
+        });
+        let rv = f(self);
+        self.scopes.sync_regions.pop().expect("trying to pop empty sync region stack");
+        rv
     }
 
     /// Push a scope onto the stack. You can then build code in this
