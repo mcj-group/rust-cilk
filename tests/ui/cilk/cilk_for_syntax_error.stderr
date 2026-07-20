@@ -1,5 +1,5 @@
 error: missing `in` in `for` loop
-  --> $DIR/cilk_for_syntax_error.rs:9:19
+  --> $DIR/cilk_for_syntax_error.rs:8:19
    |
 LL |     cilk_for 1..10 {}
    |                   ^
@@ -10,7 +10,7 @@ LL |     cilk_for 1..10 in {}
    |                    ++
 
 error: missing expression to iterate on in `for` loop
-  --> $DIR/cilk_for_syntax_error.rs:9:20
+  --> $DIR/cilk_for_syntax_error.rs:8:20
    |
 LL |     cilk_for 1..10 {}
    |                    ^

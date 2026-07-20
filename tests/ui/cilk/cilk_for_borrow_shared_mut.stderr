@@ -1,5 +1,5 @@
 error[E0499]: cannot borrow `max` as mutable more than once at a time
-  --> $DIR/cilk_for_borrow_shared_mut.rs:19:27
+  --> $DIR/cilk_for_borrow_shared_mut.rs:18:27
    |
 LL |       cilk_for i in 0..1000 {
    |  ___________________________^
