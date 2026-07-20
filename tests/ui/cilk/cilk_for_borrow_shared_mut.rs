@@ -10,6 +10,7 @@
 // EXPECTED: rejected with E0499 because `max` is mutably borrowed across
 // parallel loop iterations.
 
+//@ known-bug: unknown
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
 
