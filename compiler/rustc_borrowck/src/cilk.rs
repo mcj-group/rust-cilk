@@ -29,11 +29,12 @@
 use rustc_data_structures::fx::{FxHashSet, FxIndexSet};
 use rustc_data_structures::work_queue::WorkQueue;
 use rustc_hir::attrs::OrphaningAttr;
+use rustc_hir::def_id::DefId;
 use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
 use rustc_middle::mir::{
-    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, Location, TerminatorKind,
+    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, LocalInfo, Location, TerminatorKind,
 };
 use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
@@ -55,7 +56,8 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 
 /// Returns the set of [`BasicBlock`]s whose terminator is a [`TerminatorKind::Call`]
 /// to an orphaning closure — a closure bearing `#[orphaning]` synthesized during
-/// `cilk_spawn` lowering to wrap the spawn body.
+/// `cilk_spawn` lowering to wrap the spawn body. The corresponding `DefId` of the 
+/// closure called is also returned.
 ///
 /// Calling a closure does not produce a `Call` to the closure's own `DefId`.
 /// THIR lowering rewrites `closure()` into a call to the `Fn`/`FnMut`/`FnOnce`
@@ -67,7 +69,7 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 fn blocks_calling_orphaning_closure<'tcx>(
     body: &Body<'tcx>,
     tcx: TyCtxt<'tcx>,
-) -> FxIndexSet<(BasicBlock, BasicBlock)> {
+) -> FxIndexSet<(BasicBlock, BasicBlock, DefId)> {
     let mut result = FxIndexSet::default();
     for (bb, bb_data) in body.basic_blocks.iter_enumerated() {
         let TerminatorKind::Call { ref func, target: Some(successor), .. } =
@@ -91,7 +93,7 @@ fn blocks_calling_orphaning_closure<'tcx>(
             continue;
         };
         if tcx.codegen_fn_attrs(closure_id).orphaning == OrphaningAttr::Hint {
-            result.insert((bb, successor));
+            result.insert((bb, successor, closure_id));
         }
     }
     result
@@ -150,7 +152,9 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
         }
     }
 
-    for (orphaning_call_block, successor) in blocks_calling_orphaning_closure(body, tcx) {
+    for (orphaning_call_block, successor, orphaning_closure_id) in
+        blocks_calling_orphaning_closure(body, tcx)
+    {
         let points = continuation_points(body, successor);
         if points.is_empty() {
             continue;
@@ -160,14 +164,24 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
             if bw.reserve_location.block == orphaning_call_block
                 && let BorrowKind::Mut { .. } = bw.kind
             {
-                regions.insert(bw.region);
-                for i in 0..body.basic_blocks[orphaning_call_block].statements.len() {
-                    let live = constraints.liveness_constraints.is_live_at(
-                        bw.region,
-                        Location { block: orphaning_call_block, statement_index: i },
-                    );
-                    println!("{i} {live}");
+                let local_decl = &body.local_decls[bw.borrowed_place.local];
+
+                // Calling a closure that mutably captures a variable introduces a separate mutable
+                // borrow of the closure call object itself. This borrow only exists to invoke the
+                // closure, and is categorized as `LocalInfo::Boring` with a closure type. Extending
+                // this call-site borrow would unnecessarily keep the closure object mutably borrowed
+                // until the sync, rather than allowing it to become `StorageDead` immediately after
+                // the call. Therefore, skip the closure called by orphaning block's terminator.
+                if matches!(local_decl.local_info(), LocalInfo::Boring)
+                    && matches!(
+                        local_decl.ty.kind(),
+                        ty::Closure(closure_id, _) if *closure_id == orphaning_closure_id
+                    )
+                {
+                    continue;
                 }
+
+                regions.insert(bw.region);
             }
         }
         if regions.is_empty() {

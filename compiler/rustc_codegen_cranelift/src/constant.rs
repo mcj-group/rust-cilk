@@ -606,6 +606,7 @@ pub(crate) fn mir_operand_get_const_val<'tcx>(
                         StatementKind::Intrinsic(intrinsic) => match **intrinsic {
                             NonDivergingIntrinsic::CopyNonOverlapping(..) => return None,
                             NonDivergingIntrinsic::Assume(..) => {}
+                            _ => todo!(),
                         },
                         // conservative handling
                         StatementKind::Assign(_)
@@ -643,6 +644,7 @@ pub(crate) fn mir_operand_get_const_val<'tcx>(
                     }
                     TerminatorKind::TailCall { .. } => return None,
                     TerminatorKind::Call { .. } => {}
+                    _ => todo!(),
                 }
             }
             computed_scalar_int
