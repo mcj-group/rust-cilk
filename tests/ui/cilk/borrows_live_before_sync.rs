@@ -3,7 +3,6 @@
 // Currently fails because we kill borrows at the end of the block rather
 // than at the sync.
 
-//@ known-bug: unknown
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
 
@@ -16,5 +15,6 @@ fn main() {
         println!("{}", &s);
     };
     s.push_str(" world");
+    //~^ ERROR: cannot borrow `s` as mutable because it is also borrowed as immutable [E0502]
     println!("{}", s);
 }
