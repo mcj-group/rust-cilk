@@ -1,0 +1,15 @@
+error[E0597]: `v` does not live long enough
+  --> $DIR/cilk_scope_drop_before_sync.rs:12:28
+   |
+LL |             let v = Vec::<i32>::new();
+   |                 - binding `v` declared here
+LL |             cilk_spawn{
+LL |                 println!("{v:?}");
+   |                            ^ borrowed value does not live long enough
+...
+LL |         }
+   |         - `v` dropped here while still borrowed
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0597`.
