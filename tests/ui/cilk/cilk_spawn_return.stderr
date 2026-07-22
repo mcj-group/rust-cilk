@@ -1,0 +1,8 @@
+error: cannot use `return` within cilk_spawn
+  --> $DIR/cilk_spawn_return.rs:9:9
+   |
+LL |         return 5;
+   |         ^^^^^^^^
+
+error: aborting due to 1 previous error
+
