@@ -91,7 +91,7 @@ impl MutVisitor for ReplaceVariable<'_> {
     }
 }
 
-// provide extra context on which Cilk Keyword the CilkControlFlow is working for
+// provide extra context about which cilk keyword (cilk_spawn or cilk_for) the CilkControlFlow is walking through
 #[derive(Clone, Copy)]
 enum CilkControlFlowCtx{
     CilkFor{outer_label: Option<Label>},
@@ -197,7 +197,7 @@ impl MutVisitor for CilkControlFlow<'_> {
             }
             // for nested cilk_for we only evaluates the iter which may still contain
             // `continue` to the parent `cilk_for`, these are safe to convert to reattach
-            // see tests/ui/cilk/
+            // see `tests/ui/cilk/cilk_for_continue_in_nested_iter.rs`
             ExprKind::ForLoop {
                 iter,
                 kind: ForLoopKind::CilkFor(_),
