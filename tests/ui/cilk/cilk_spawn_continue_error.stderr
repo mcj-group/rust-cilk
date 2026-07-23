@@ -1,5 +1,5 @@
 error: cannot use `continue` within cilk_spawn
-  --> $DIR/cilk_spawn_continue.rs:10:13
+  --> $DIR/cilk_spawn_continue_error.rs:10:13
    |
 LL |             continue;
    |             ^^^^^^^^

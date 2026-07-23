@@ -1,5 +1,5 @@
 error: cannot use `break` within cilk_spawn
-  --> $DIR/cilk_spawn_break.rs:10:13
+  --> $DIR/cilk_spawn_break_error.rs:10:13
    |
 LL |             break;
    |             ^^^^^
