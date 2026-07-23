@@ -56,7 +56,7 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 
 /// Returns the set of [`BasicBlock`]s whose terminator is a [`TerminatorKind::Call`]
 /// to an orphaning closure — a closure bearing `#[orphaning]` synthesized during
-/// `cilk_spawn` lowering to wrap the spawn body. The corresponding `DefId` of the 
+/// `cilk_spawn` lowering to wrap the spawn body. The corresponding `DefId` of the
 /// closure called is also returned.
 ///
 /// Calling a closure does not produce a `Call` to the closure's own `DefId`.

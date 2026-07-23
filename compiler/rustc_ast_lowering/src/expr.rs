@@ -20,9 +20,8 @@ use thin_vec::{ThinVec, thin_vec};
 use visit::{Visitor, walk_expr};
 
 use super::errors::{
-    AsyncCoroutinesNotSupported, AwaitOnlyInAsyncFnAndBlocks, 
-    BadControlFlowInCilkFor, BadControlFlowInCilkSpawn,
-    ClosureCannotBeStatic, CoroutineTooManyParameters,
+    AsyncCoroutinesNotSupported, AwaitOnlyInAsyncFnAndBlocks, BadControlFlowInCilkFor,
+    BadControlFlowInCilkSpawn, ClosureCannotBeStatic, CoroutineTooManyParameters,
     FunctionalRecordUpdateDestructuringAssignment, InclusiveRangeWithNoEnd, MatchArmWithNoBody,
     NeverPatternWithBody, NeverPatternWithGuard, UnderscoreExprLhsAssign,
 };
@@ -93,12 +92,12 @@ impl MutVisitor for ReplaceVariable<'_> {
 
 // provide extra context about which cilk keyword (cilk_spawn or cilk_for) the CilkControlFlow is walking through
 #[derive(Clone, Copy)]
-enum CilkControlFlowCtx{
-    CilkFor{outer_label: Option<Label>},
+enum CilkControlFlowCtx {
+    CilkFor { outer_label: Option<Label> },
     CilkSpawn,
 }
 
-// For handling break, continue, and return statements inside cilk_for statements
+// For handling break, continue, and return statements inside cilk_for and cilk_spawn statements
 struct CilkControlFlow<'a> {
     dcx: &'a DiagCtxtHandle<'a>,
     // the label of the cilk_for if applicable
@@ -108,40 +107,29 @@ struct CilkControlFlow<'a> {
 }
 
 impl<'a> CilkControlFlow<'a> {
-    fn new_for_cilk_for(dcx: &'a DiagCtxtHandle<'a>, outer_label: Option<Label>) -> CilkControlFlow<'a> {
-        CilkControlFlow { 
-            dcx, 
-            ctx: CilkControlFlowCtx::CilkFor{outer_label}, 
-            inner_labels: Vec::new() 
+    fn new_for_cilk_for(
+        dcx: &'a DiagCtxtHandle<'a>,
+        outer_label: Option<Label>,
+    ) -> CilkControlFlow<'a> {
+        CilkControlFlow {
+            dcx,
+            ctx: CilkControlFlowCtx::CilkFor { outer_label },
+            inner_labels: Vec::new(),
         }
     }
 
     fn new_for_cilk_spawn(dcx: &'a DiagCtxtHandle<'a>) -> CilkControlFlow<'a> {
-        CilkControlFlow { 
-            dcx, 
-            ctx: CilkControlFlowCtx::CilkSpawn, 
-            inner_labels: Vec::new() 
-        }
+        CilkControlFlow { dcx, ctx: CilkControlFlowCtx::CilkSpawn, inner_labels: Vec::new() }
     }
 
-    fn emit_bad_control_flow(
-        &self,
-        span: Span,
-        keyword: &'static str,
-    ) -> ExprKind {
+    fn emit_bad_control_flow(&self, span: Span, keyword: &'static str) -> ExprKind {
         match self.ctx {
-            CilkControlFlowCtx::CilkFor { .. } => {
-                ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkFor {
-                    span,
-                    keyword: keyword.to_owned(),
-                }))
-            }
-            CilkControlFlowCtx::CilkSpawn => {
-                ExprKind::Err(self.dcx.emit_err(BadControlFlowInCilkSpawn {
-                    span,
-                    keyword: keyword.to_owned(),
-                }))
-            }
+            CilkControlFlowCtx::CilkFor { .. } => ExprKind::Err(
+                self.dcx.emit_err(BadControlFlowInCilkFor { span, keyword: keyword.to_owned() }),
+            ),
+            CilkControlFlowCtx::CilkSpawn => ExprKind::Err(
+                self.dcx.emit_err(BadControlFlowInCilkSpawn { span, keyword: keyword.to_owned() }),
+            ),
         }
     }
 }
@@ -160,33 +148,31 @@ impl MutVisitor for CilkControlFlow<'_> {
                     mut_visit::walk_expr(self, e);
                 }
             }
-            ExprKind::Continue(label) => {
-                match self.ctx{
-                    CilkControlFlowCtx::CilkFor{ outer_label } =>{
-                        if label.is_some() && *label == outer_label
-                            || label.is_none() && self.inner_labels.is_empty()
-                        {
-                            *kind = ExprKind::Reattach;
-                        } else if label.is_some() && !self.inner_labels.contains(label) {
-                            *kind = self.emit_bad_control_flow(*span, "continue");
-                        } else {
-                            mut_visit::walk_expr(self, e);
-                        }
-                    }
-                    CilkControlFlowCtx::CilkSpawn =>{
-                        let reject = match label{
-                            None => self.inner_labels.is_empty(),
-                            Some(_) => !self.inner_labels.contains(label),
-                        };
-
-                        if reject{
-                            *kind = self.emit_bad_control_flow(*span, "continue");
-                        }else{
-                            mut_visit::walk_expr(self, e);
-                        }
+            ExprKind::Continue(label) => match self.ctx {
+                CilkControlFlowCtx::CilkFor { outer_label } => {
+                    if label.is_some() && *label == outer_label
+                        || label.is_none() && self.inner_labels.is_empty()
+                    {
+                        *kind = ExprKind::Reattach;
+                    } else if label.is_some() && !self.inner_labels.contains(label) {
+                        *kind = self.emit_bad_control_flow(*span, "continue");
+                    } else {
+                        mut_visit::walk_expr(self, e);
                     }
                 }
-            }
+                CilkControlFlowCtx::CilkSpawn => {
+                    let reject = match label {
+                        None => self.inner_labels.is_empty(),
+                        Some(_) => !self.inner_labels.contains(label),
+                    };
+
+                    if reject {
+                        *kind = self.emit_bad_control_flow(*span, "continue");
+                    } else {
+                        mut_visit::walk_expr(self, e);
+                    }
+                }
+            },
             ExprKind::Ret(_) => {
                 *kind = self.emit_bad_control_flow(*span, "return");
             }
@@ -198,11 +184,7 @@ impl MutVisitor for CilkControlFlow<'_> {
             // for nested cilk_for we only evaluates the iter which may still contain
             // `continue` to the parent `cilk_for`, these are safe to convert to reattach
             // see `tests/ui/cilk/cilk_for_continue_in_nested_iter.rs`
-            ExprKind::ForLoop {
-                iter,
-                kind: ForLoopKind::CilkFor(_),
-                ..
-            } => {
+            ExprKind::ForLoop { iter, kind: ForLoopKind::CilkFor(_), .. } => {
                 self.visit_expr(iter);
             }
             ExprKind::ForLoop { label, .. } => {
@@ -219,7 +201,7 @@ impl MutVisitor for CilkControlFlow<'_> {
                 mut_visit::walk_expr(self, e);
                 self.inner_labels.pop();
             }
- 
+
             ExprKind::Closure(_) => {}
             _ => mut_visit::walk_expr(self, e),
         };
