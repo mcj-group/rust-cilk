@@ -2,6 +2,7 @@
 // Tests that noraml continue with a lable is allowed within a cilk_spawn.
 
 //@ run-pass
+//@ check-run-results
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
 
@@ -11,7 +12,7 @@ fn main() {
             if i == 5{
                 continue;
             }
-            print!("{:?}", i);
+            println!("{:?}", i);
         }
     };
 }
