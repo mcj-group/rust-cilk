@@ -771,7 +771,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
     /// Doesn't create the sync region immediately
     /// The first block created within f (that isn't inside another sync region) will instantiate a sync region and sync
-    /// it at the end of the block before drops (see `ast_block_stmts`)
+    /// it at the end of the block before drops (see `ast_block_stmts`) and before a return (see `break_scope`)
     pub(crate) fn in_sync_region<R>(
         &mut self,
         f: impl FnOnce(&mut Builder<'a, 'tcx>) -> BlockAnd<R>,
@@ -896,6 +896,18 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             for drop in &scope.drops {
                 drop_idx = drops.add_drop(*drop, drop_idx);
             }
+        }
+        // ensure a sync is created before the end-of-function drops
+        if let (Some(SyncRegionState::Instatiated(sync_region)), BreakableTarget::Return) =
+            (self.scopes.sync_regions.last(), target)
+        {
+            let sync_target = self.cfg.start_new_block();
+            self.cfg.terminate(
+                block,
+                source_info,
+                TerminatorKind::Sync { sync_region: *sync_region, target: sync_target },
+            );
+            block = sync_target;
         }
         drops.add_entry_point(block, drop_idx);
 
