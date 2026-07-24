@@ -1,0 +1,8 @@
+error: cannot use `continue` within cilk_for
+  --> $DIR/nested_cilk_for_continue_outer.rs:10:13
+   |
+LL |             continue 'outer;
+   |             ^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+

@@ -1,13 +1,15 @@
+use itertools::Either;
 use rustc_middle::middle::region::Scope;
 use rustc_middle::mir::*;
+use rustc_middle::thir::visit::{self as thir_visit, Visitor};
 use rustc_middle::thir::*;
-use rustc_middle::{span_bug, ty};
+use rustc_middle::{span_bug, thir, ty};
 use rustc_span::Span;
 use tracing::debug;
 
 use crate::builder::ForGuard::OutsideGuard;
 use crate::builder::matches::{DeclareLetBindings, ScheduleDrops};
-use crate::builder::scope::LintLevel;
+use crate::builder::scope::{LintLevel, SyncRegionState};
 use crate::builder::{BlockAnd, BlockAndExtension, BlockFrame, Builder};
 
 impl<'a, 'tcx> Builder<'a, 'tcx> {
@@ -29,6 +31,44 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 this.ast_block_stmts(destination, block, span, stmts, expr, region_scope)
             }
         })
+    }
+
+    /// Returns `true` if `expr` contains a `cilk_for` loop, or a `cilk_spawn`,
+    /// `cilk_scope`, or `cilk_sync` expression anywhere within it.
+    fn contains_cilk_construct(&self, id: Either<StmtId, ExprId>) -> bool {
+        struct CilkConstructVisitor<'a, 'tcx> {
+            thir: &'a Thir<'tcx>,
+            found: bool,
+        }
+
+        impl<'a, 'tcx> Visitor<'a, 'tcx> for CilkConstructVisitor<'a, 'tcx> {
+            fn thir(&self) -> &'a Thir<'tcx> {
+                self.thir
+            }
+
+            fn visit_expr(&mut self, expr: &'a thir::Expr<'tcx>) {
+                if self.found {
+                    return;
+                }
+                match expr.kind {
+                    thir::ExprKind::CilkSpawn { .. }
+                    | thir::ExprKind::CilkSync
+                    | thir::ExprKind::Loop { tapir_loop_spawn: true, .. } => {
+                        self.found = true;
+                    }
+                    // ignore CilkScope as they have their own internal sync region
+                    thir::ExprKind::CilkScope { .. } => {}
+                    _ => thir_visit::walk_expr(self, expr),
+                }
+            }
+        }
+
+        let mut visitor = CilkConstructVisitor { thir: self.thir, found: false };
+        match id {
+            Either::Left(stmt) => visitor.visit_stmt(&self.thir[stmt]),
+            Either::Right(expr) => visitor.visit_expr(&self.thir[expr]),
+        }
+        visitor.found
     }
 
     fn ast_block_stmts(
@@ -67,6 +107,28 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         let mut last_remainder_scope = region_scope;
 
         let source_info = this.source_info(span);
+
+        let (should_create_sync_region, should_sync) = if matches!(
+            this.scopes.sync_regions.last(),
+            Some(SyncRegionState::Declared) | Some(SyncRegionState::DeclaredWithoutSync)
+        ) {
+            let found = stmts.iter().any(|stmt| this.contains_cilk_construct(Either::Left(*stmt)))
+                || expr.is_some_and(|expr| this.contains_cilk_construct(Either::Right(expr)));
+            let state = this.scopes.sync_regions.last_mut().unwrap();
+            if !found {
+                *state = SyncRegionState::Ignored;
+                (false, false)
+            } else {
+                (true, matches!(state, SyncRegionState::Declared))
+            }
+        } else {
+            (false, false)
+        };
+
+        if should_create_sync_region {
+            this.create_sync_region(block, source_info);
+        }
+
         for stmt in stmts {
             let Stmt { ref kind } = this.thir[*stmt];
             match kind {
@@ -340,6 +402,17 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 this.cfg.push_assign_unit(block, source_info, destination, this.tcx);
             }
         }
+
+        if should_sync {
+            let target = this.cfg.start_new_block();
+            this.cfg.terminate(
+                block,
+                source_info,
+                TerminatorKind::Sync { sync_region: this.scopes.current_sync_region(), target },
+            );
+            block = target;
+        }
+
         // Finally, we pop all the let scopes before exiting out from the scope of block
         // itself.
         for scope in let_scope_stack.into_iter().rev() {

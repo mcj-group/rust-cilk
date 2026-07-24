@@ -1,0 +1,8 @@
+error: cannot use `break` within cilk_spawn
+  --> $DIR/cilk_spawn_break_label_error.rs:10:13
+   |
+LL |             break 'out;
+   |             ^^^^^^^^^^
+
+error: aborting due to 1 previous error
+
