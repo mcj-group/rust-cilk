@@ -496,7 +496,13 @@ macro_rules! make_mir_visitor {
                                 self.visit_operand(dst, location);
                                 self.visit_operand(count, location);
                             },
-                            NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop | NonDivergingIntrinsic::TaskframeCreate(_) | NonDivergingIntrinsic::TaskframeUse(_) | NonDivergingIntrinsic::TaskframeEnd(_) | NonDivergingIntrinsic::TapirSyncRegionStart(_) | NonDivergingIntrinsic::OrphaningSyncregion(_) => {},
+                            NonDivergingIntrinsic::TapirRuntimeStart | NonDivergingIntrinsic::TapirRuntimeStop => {},NonDivergingIntrinsic::TaskframeCreate(local) | NonDivergingIntrinsic::TaskframeUse(local) | NonDivergingIntrinsic::TaskframeEnd(local) | NonDivergingIntrinsic::TapirSyncRegionStart(local) | NonDivergingIntrinsic::OrphaningSyncregion(local) => {
+                                self.visit_local(
+                                    $(& $mutability)? *local,
+                                    PlaceContext::NonMutatingUse(NonMutatingUseContext::Inspect),
+                                    location
+                                );
+                            },
                         }
                     }
                     StatementKind::BackwardIncompatibleDropHint { place, .. } => {
@@ -628,13 +634,15 @@ macro_rules! make_mir_visitor {
                         );
                     }
 
-                    // NOTE(jhilton): this should be the right visitor behavior since there are no direct values to visit.
-
-                    TerminatorKind::Detach { .. } => {}
-
-                    TerminatorKind::Reattach { .. } => {}
-
-                    TerminatorKind::Sync { .. } => {}
+                    TerminatorKind::Detach { sync_region, .. } |
+                    TerminatorKind::Reattach { sync_region, .. } |
+                    TerminatorKind::Sync { sync_region, .. } => {
+                        self.visit_local(
+                            $(& $mutability)? *sync_region,
+                            PlaceContext::NonMutatingUse(NonMutatingUseContext::Inspect),
+                            location
+                        );
+                    }
 
                     TerminatorKind::InlineAsm {
                         asm_macro: _,
