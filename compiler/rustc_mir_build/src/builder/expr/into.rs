@@ -885,7 +885,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                 // multiple blocks can branch to it instead of having more than one reattach
                 let reattach_block = this.cfg.start_new_block();
 
-                let taskframe = this.scopes.get_taskframe();
+                let taskframe = this.get_taskframe(source_info);
                 this.cfg.push(
                     block,
                     Statement::new(
@@ -946,7 +946,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
             }
 
             ExprKind::CilkScope { block: ast_block } => {
-                let taskframe = this.scopes.get_taskframe();
+                let taskframe = this.get_taskframe(source_info);
                 this.cfg.push(
                     block,
                     Statement::new(

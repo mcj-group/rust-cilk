@@ -26,6 +26,7 @@ use rustc_macros::{HashStable, TyDecodable, TyEncodable, TypeFoldable, TypeVisit
 use rustc_serialize::{Decodable, Encodable};
 use rustc_span::source_map::Spanned;
 use rustc_span::{DUMMY_SP, Span, Symbol};
+use serde::Serialize;
 use tracing::{debug, trace};
 
 pub use self::query::*;
@@ -840,7 +841,7 @@ impl SourceInfo {
 // Variables and temps
 
 rustc_index::newtype_index! {
-    #[derive(HashStable)]
+    #[derive(HashStable, Serialize)]
     #[encodable]
     #[orderable]
     #[debug_format = "_{}"]
