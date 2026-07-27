@@ -851,6 +851,17 @@ fn check_codegen_attributes<'tcx, I: Inliner<'tcx>>(
     Ok(())
 }
 
+// Technically, it might be okay just to check just the first instruction, since this should be where the sync region is
+// declared, but we check the whole first block just in case
+fn has_cilk_tasks(body: &Body<'_>) -> bool {
+    body.basic_blocks[START_BLOCK].statements.iter().any(|stmt| {
+        matches!(
+            stmt.kind,
+            StatementKind::Intrinsic(box NonDivergingIntrinsic::TapirSyncRegionStart(_))
+        )
+    })
+}
+
 fn inline_call<'tcx, I: Inliner<'tcx>>(
     inliner: &I,
     caller_body: &mut Body<'tcx>,
@@ -986,6 +997,22 @@ fn inline_call<'tcx, I: Inliner<'tcx>>(
     // Insert all of the (mapped) parts of the callee body into the caller.
     caller_body.local_decls.extend(callee_body.drain_vars_and_temps());
     caller_body.source_scopes.append(&mut callee_body.source_scopes);
+
+    if has_cilk_tasks(caller_body) && has_cilk_tasks(&callee_body) {
+        let taskframe = caller_body
+            .local_decls
+            .push(LocalDecl::with_source_info(tcx.types.unit, callsite.source_info));
+        caller_body.basic_blocks_mut()[callsite.block].statements.push(Statement::new(
+            callsite.source_info,
+            StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeCreate(
+                taskframe,
+            ))),
+        ));
+        caller_body.basic_blocks_mut()[return_block.unwrap()].statements.push(Statement::new(
+            callsite.source_info,
+            StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeEnd(taskframe))),
+        ));
+    }
 
     // only "full" debug promises any variable-level information
     if tcx
