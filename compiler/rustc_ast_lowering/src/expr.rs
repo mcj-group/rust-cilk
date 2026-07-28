@@ -496,7 +496,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     let block = self.lower_block(&*body_clone, false);
                     let expr = self.expr_block(block);
                     hir::ExprKind::CilkSpawn(self.arena.alloc(hir::CilkSpawn {
-                        def_id: Some(self.local_def_id(e.id)),
+                        def_id: self.local_def_id(e.id),
                         body: self.arena.alloc(expr),
                     }))
                 }
@@ -2807,7 +2807,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         hir::Expr {
             hir_id: spawn_hir_id,
             kind: hir::ExprKind::CilkSpawn(
-                self.arena.alloc(hir::CilkSpawn { def_id: Some(spawn_def_id), body: block }),
+                self.arena.alloc(hir::CilkSpawn { def_id: spawn_def_id, body: block }),
             ),
             span: b.span,
         }

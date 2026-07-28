@@ -149,19 +149,14 @@ impl<'a, 'tcx> Visitor<'tcx> for InferBorrowKindVisitor<'a, 'tcx> {
             hir::ExprKind::CilkSpawn(spawn) => {
                 // analyzes nested closures first so the capture info can be reused
                 self.visit_expr(spawn.body);
-                if let Some(spawn_def_id) = spawn.def_id {
-                    match self.fcx.analyze_cilk_spawn(
-                        expr.span,
-                        spawn_def_id,
-                        spawn.body,
-                    ) {
-                        Some(()) => {}
-                        None => {
-                            debug!(
-                                ?spawn_def_id,
-                                "cilk_spawn capture analysis could not be completed"
-                            );
-                        }
+                let spawn_def_id = spawn.def_id;
+                match self.fcx.analyze_cilk_spawn(expr.span, spawn_def_id, spawn.body) {
+                    Some(()) => {}
+                    None => {
+                        debug!(
+                            ?spawn_def_id,
+                            "cilk_spawn capture analysis could not be completed"
+                        );
                     }
                 }
                 return;

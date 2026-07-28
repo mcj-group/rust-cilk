@@ -270,8 +270,7 @@ impl<'tcx> TyCtxt<'tcx> {
     ) -> Option<&'tcx Expr<'tcx>> {
         match self.hir_node_by_def_id(id) {
             Node::Expr(Expr { kind: ExprKind::CilkSpawn(spawn), .. })
-                if spawn.def_id == Some(id) =>
-            {
+                if spawn.def_id == id => {
                 Some(spawn.body)
             }
             _ => None,

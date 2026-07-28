@@ -1683,7 +1683,7 @@ pub struct Crate<'hir> {
 /// CilkSpawn and thus enable `Send` and `Sync` trait checks for UpVars.
 #[derive(Debug, Clone, Copy, HashStable_Generic)]
 pub struct CilkSpawn<'hir> {
-    pub def_id: Option<LocalDefId>,
+    pub def_id: LocalDefId,
     pub body: &'hir Expr<'hir>,
 }
 
