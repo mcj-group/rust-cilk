@@ -262,6 +262,22 @@ impl<'tcx> TyCtxt<'tcx> {
         Some(self.hir_body(self.hir_node_by_def_id(id).body_id()?))
     }
 
+    /// Given a closure-like `LocalDefId`, returns the expression owned by a
+    /// `cilk_spawn`, or `None` when the definition is not a spawn.
+    pub fn hir_maybe_cilk_spawn_owned_by(
+        self,
+        id: LocalDefId,
+    ) -> Option<&'tcx Expr<'tcx>> {
+        match self.hir_node_by_def_id(id) {
+            Node::Expr(Expr { kind: ExprKind::CilkSpawn(spawn), .. })
+                if spawn.def_id == Some(id) =>
+            {
+                Some(spawn.body)
+            }
+            _ => None,
+        }
+    }
+
     /// Given a body owner's id, returns the `BodyId` associated with it.
     #[track_caller]
     pub fn hir_body_owned_by(self, id: LocalDefId) -> &'tcx Body<'tcx> {

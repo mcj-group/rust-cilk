@@ -146,6 +146,26 @@ impl<'a, 'tcx> Visitor<'tcx> for InferBorrowKindVisitor<'a, 'tcx> {
                 self.visit_body(body);
                 self.fcx.analyze_closure(expr.hir_id, expr.span, body_id, body, capture_clause);
             }
+            hir::ExprKind::CilkSpawn(spawn) => {
+                // analyzes nested closures first so the capture info can be reused
+                self.visit_expr(spawn.body);
+                if let Some(spawn_def_id) = spawn.def_id {
+                    match self.fcx.analyze_cilk_spawn(
+                        expr.span,
+                        spawn_def_id,
+                        spawn.body,
+                    ) {
+                        Some(()) => {}
+                        None => {
+                            debug!(
+                                ?spawn_def_id,
+                                "cilk_spawn capture analysis could not be completed"
+                            );
+                        }
+                    }
+                }
+                return;
+            }
             _ => {}
         }
 
@@ -159,6 +179,105 @@ impl<'a, 'tcx> Visitor<'tcx> for InferBorrowKindVisitor<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
+    #[instrument(skip(self, body), level = "debug")]
+    fn analyze_cilk_spawn(
+        &self,
+        span: Span,
+        spawn_def_id: LocalDefId,
+        body: &'tcx hir::Expr<'tcx>,
+    ) -> Option<()> {
+        // infers the types with euv
+        // a new spawn_fcx is created instead of using self.infcx
+        // because euv requires the correct def_id owned by the cilk_spawn on initialization
+        let mut delegate = InferBorrowKind {
+            closure_def_id: spawn_def_id,
+            capture_information: Default::default(),
+            fake_reads: Default::default(),
+        };
+        let spawn_fcx = FnCtxt::new(self, self.param_env, spawn_def_id);
+        let _ = euv::ExprUseVisitor::new(&spawn_fcx, &mut delegate).consume_expr(body);
+
+        debug!(
+            "For cilk_spawn={:?}, capture_information={:#?}",
+            spawn_def_id, delegate.capture_information
+        );
+        self.log_capture_analysis_first_pass(spawn_def_id, &delegate.capture_information);
+
+        // reasons about the inferred types and minimizes the captures of cilk_spawn
+        let (capture_information, _, _) = self.process_collected_capture_information(
+            hir::CaptureBy::Ref,
+            &delegate.capture_information,
+        );
+        self.compute_min_captures(spawn_def_id, capture_information, span);
+
+        // gets the root hir_id for all UpVars in the CilkSpawn
+        let upvars = self.tcx.upvars_mentioned(spawn_def_id)?;
+
+        // gets the inferred types of the minimal capture map
+        let typeck_results = self.typeck_results.borrow();
+        let min_captures = typeck_results.closure_min_captures.get(&spawn_def_id)?;
+
+        // gets `Send` and `Sync` traits item
+        let send_trait = self.tcx.get_diagnostic_item(sym::Send)?;
+        let sync_trait = self.tcx.lang_items().sync_trait()?;
+
+        // loops through every UpVars in CilkSpawn and checks if all captures can be implemented `Send` and/or `Sync` trait. 
+        // For any UpVars, it should implement `Send` to be used in CilkSpawn
+        // For any &T captured, it should also implement `Sync` to share across threads.
+        // Disjoint capture in closure proposed in RFC2229 and implemented starting from Rust 2021 is followed here as we only check the
+        // captured fields not the entire root variable.
+        for (&var_hir_id, upvar) in upvars {
+            for capture in min_captures.get(&var_hir_id).into_iter().flatten() {
+                // gets the type of the cpature
+                let place_ty = self.resolve_vars_if_possible(capture.place.ty());
+                let capture_ty = apply_capture_kind_on_capture_ty(
+                    self.tcx,
+                    place_ty,
+                    capture.info.capture_kind,
+                    self.tcx.lifetimes.re_erased,
+                );
+                let capture_ty = self.resolve_vars_if_possible(capture_ty);
+
+                // checks if the capture can implement `Send`
+                let implements_send = self
+                    .infcx
+                    .type_implements_trait(send_trait, [capture_ty], self.param_env)
+                    .must_apply_modulo_regions();
+
+                // if it is a &T, checks additionally if it can implement `Sync`
+                let is_shared_capture = matches!(
+                    capture.info.capture_kind,
+                    UpvarCapture::ByRef(BorrowKind::Immutable)
+                );
+                let implements_sync = !is_shared_capture
+                    || self
+                        .infcx
+                        .type_implements_trait(sync_trait, [place_ty], self.param_env)
+                        .must_apply_modulo_regions();
+                
+                // debug output
+                let capture_span = capture
+                    .info
+                    .path_expr_id
+                    .map(|hir_id| self.tcx.hir_span(hir_id))
+                    .unwrap_or(upvar.span);
+                if !implements_sync {
+                    self.dcx().emit_err(crate::errors::CilkSpawnCaptureNotSync {
+                        span: capture_span,
+                        ty: place_ty,
+                    });
+                } else if !implements_send {
+                    self.dcx().emit_err(crate::errors::CilkSpawnCaptureNotSend {
+                        span: capture_span,
+                        ty: capture_ty,
+                    });
+                }
+            }
+        }
+
+        Some(())
+    }
+
     /// Analysis starting point.
     #[instrument(skip(self, body), level = "debug")]
     fn analyze_closure(

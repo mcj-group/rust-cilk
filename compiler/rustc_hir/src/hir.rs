@@ -1677,10 +1677,12 @@ pub struct Crate<'hir> {
     pub opt_hir_hash: Option<Fingerprint>,
 }
 
+/// A closure-like def_id is created to CilkSpawn so CilkSpawn could fall into the
+/// InferBorrowKindVisitor pass similar to a closure, where the types of variables inside CilkSpawn
+/// is inferred as if inside a closure. This provides info on the borrow types inside
+/// CilkSpawn and thus enable `Send` and `Sync` trait checks for UpVars.
 #[derive(Debug, Clone, Copy, HashStable_Generic)]
 pub struct CilkSpawn<'hir> {
-    /// Source-level spawns have a closure-like definition identity. Synthetic
-    /// spawns introduced while lowering `cilk_for` do not yet have one.
     pub def_id: Option<LocalDefId>,
     pub body: &'hir Expr<'hir>,
 }

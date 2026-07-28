@@ -1390,3 +1390,21 @@ pub(crate) struct ProjectOnNonPinProjectType {
     )]
     pub sugg_span: Option<Span>,
 }
+
+#[derive(Diagnostic)]
+#[diag("`cilk_spawn` capture cannot be sent between threads safely")]
+pub(crate) struct CilkSpawnCaptureNotSend<'tcx> {
+    #[primary_span]
+    #[label("capture of type `{$ty}` does not implement `Send`")]
+    pub span: Span,
+    pub ty: Ty<'tcx>,
+}
+
+#[derive(Diagnostic)]
+#[diag("shared `cilk_spawn` capture cannot be sent between threads safely")]
+pub(crate) struct CilkSpawnCaptureNotSync<'tcx> {
+    #[primary_span]
+    #[label("shared capture of type `{$ty}` does not implement `Sync`")]
+    pub span: Span,
+    pub ty: Ty<'tcx>,
+}
