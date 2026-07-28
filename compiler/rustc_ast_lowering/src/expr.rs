@@ -2169,17 +2169,17 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 // ensures the disambiguator is shared with the resolver, preventing a
                 // DefPathHash collision with user-written closures inside the loop body.
                 let closure_def_id = self.local_def_id(cilk_closure_node_id);
+                let closure_hir_id = self.next_id();
+                // Register the closure DefId
+                self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
 
                 // Wrap the body in a cilk_spawn
+                // the fake closure def_id created for cilk_spawn is a child of the outer closure 
                 let spawn_expr_val: rustc_hir::Expr<'_> =
                     self.expr_spawn_block(spawn_block, closure_def_id);
                 let spawn_expr = self.arena.alloc(spawn_expr_val);
                 let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
                 let stmts_slice = self.arena.alloc_from_iter([shadow_local_stmt, spawn_stmt]);
-
-                let closure_hir_id = self.next_id();
-                // Register the closure DefId
-                self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
 
                 // Create the closure body
                 let inner_block = self.block_all(body_block.span, stmts_slice, None);
