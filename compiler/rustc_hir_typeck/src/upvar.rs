@@ -201,7 +201,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             "For cilk_spawn={:?}, capture_information={:#?}",
             spawn_def_id, delegate.capture_information
         );
-        self.log_capture_analysis_first_pass(spawn_def_id, &delegate.capture_information);
+        self.log_capture_analysis_first_pass(spawn_def_id, &delegate.capture_information, span);
 
         // reasons about the inferred types and minimizes the captures of cilk_spawn
         let (capture_information, _, _) = self.process_collected_capture_information(
