@@ -1750,10 +1750,13 @@ impl<'a> State<'a> {
                 self.word_space("yield");
                 self.print_expr_cond_paren(expr, self.precedence(expr) < ExprPrecedence::Jump);
             }
-            hir::ExprKind::CilkSpawn(expr) => {
+            hir::ExprKind::CilkSpawn(spawn) => {
                 // NOTE(jhilton): this precedence should make sense: cilk_spawn is a control flow construct.
                 self.word_space("cilk_spawn");
-                self.print_expr_cond_paren(expr, self.precedence(expr) < ExprPrecedence::Jump); // FIXME(CAIATHEN): just copied Yield because https://github.com/aleph-oh/rust/blob/bd639373f3f033e8c121f3e2448783598faf6ceb/compiler/rustc_hir_pretty/src/lib.rs
+                self.print_expr_cond_paren(
+                    spawn.body,
+                    self.precedence(spawn.body) < ExprPrecedence::Jump,
+                ); 
             }
             hir::ExprKind::CilkScope(block) => {
                 self.word_space("cilk_scope");

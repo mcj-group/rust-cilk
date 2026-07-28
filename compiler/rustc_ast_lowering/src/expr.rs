@@ -494,7 +494,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     //  In the mean time, we're doing a little extra work to make the temporary expression and pass it along into the next IR.
                     let block = self.lower_block(&*body_clone, false);
                     let expr = self.expr_block(block);
-                    hir::ExprKind::CilkSpawn(self.arena.alloc(expr))
+                    hir::ExprKind::CilkSpawn(self.arena.alloc(hir::CilkSpawn {
+                        def_id: Some(self.local_def_id(e.id)),
+                        body: self.arena.alloc(expr),
+                    }))
                 }
                 ExprKind::CilkScope(body) => {
                     let block = self.lower_block(body, false);
@@ -2783,7 +2786,12 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
     fn expr_spawn_block(&mut self, b: &'hir hir::Block<'hir>) -> hir::Expr<'hir> {
         let block = self.arena.alloc(self.expr_block(b));
-        self.expr(b.span, hir::ExprKind::CilkSpawn(block))
+        self.expr(
+            b.span,
+            hir::ExprKind::CilkSpawn(
+                self.arena.alloc(hir::CilkSpawn { def_id: None, body: block }),
+            ),
+        )
     }
 
     /// Wrap an expression in a block, and wrap that block in an expression again.

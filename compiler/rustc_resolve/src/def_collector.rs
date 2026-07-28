@@ -395,6 +395,9 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
 
         let parent_def = match &expr.kind {
             ExprKind::MacCall(..) => return self.visit_macro_invoc(expr.id),
+            ExprKind::CilkSpawn(..) => {
+                self.create_def(expr.id, None, DefKind::Closure, expr.span)
+            }
             ExprKind::Closure(..) | ExprKind::Gen(..) => {
                 self.create_def(expr.id, None, DefKind::Closure, expr.span)
             }

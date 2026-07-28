@@ -945,8 +945,8 @@ pub fn walk_expr<'v, V: Visitor<'v>>(visitor: &mut V, expression: &'v Expr<'v>) 
             visit_opt!(visitor, visit_ty_unambig, ty);
         }
         ExprKind::Lit(lit) => try_visit!(visitor.visit_lit(*hir_id, lit, false)),
-        ExprKind::CilkSpawn(expr) => {
-            visitor.visit_expr(expr);
+        ExprKind::CilkSpawn(spawn) => {
+            visitor.visit_expr(spawn.body);
         }
         ExprKind::CilkSync => {}
         ExprKind::CilkScope(block) => {
