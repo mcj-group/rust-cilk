@@ -2174,7 +2174,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
 
                 // Wrap the body in a cilk_spawn
-                // the fake closure def_id created for cilk_spawn is a child of the outer closure 
+                // the fake closure def_id created for cilk_spawn is a child of the outer closure
                 let spawn_expr_val: rustc_hir::Expr<'_> =
                     self.expr_spawn_block(spawn_block, closure_def_id);
                 let spawn_expr = self.arena.alloc(spawn_expr_val);

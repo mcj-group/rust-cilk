@@ -153,10 +153,7 @@ impl<'a, 'tcx> Visitor<'tcx> for InferBorrowKindVisitor<'a, 'tcx> {
                 match self.fcx.analyze_cilk_spawn(expr.span, spawn_def_id, spawn.body) {
                     Some(()) => {}
                     None => {
-                        debug!(
-                            ?spawn_def_id,
-                            "cilk_spawn capture analysis could not be completed"
-                        );
+                        debug!(?spawn_def_id, "cilk_spawn capture analysis could not be completed");
                     }
                 }
                 return;
@@ -216,7 +213,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let send_trait = self.tcx.get_diagnostic_item(sym::Send)?;
         let sync_trait = self.tcx.lang_items().sync_trait()?;
 
-        // loops through every UpVars in CilkSpawn and checks if all captures can be implemented `Send` and/or `Sync` trait. 
+        // loops through every UpVars in CilkSpawn and checks if all captures can be implemented `Send` and/or `Sync` trait.
         // For any UpVars, it should implement `Send` to be used in CilkSpawn
         // For any &T captured, it should also implement `Sync` to share across threads.
         // Disjoint capture in closure proposed in RFC2229 and implemented starting from Rust 2021 is followed here as we only check the
@@ -240,16 +237,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     .must_apply_modulo_regions();
 
                 // if it is a &T, checks additionally if it can implement `Sync`
-                let is_shared_capture = matches!(
-                    capture.info.capture_kind,
-                    UpvarCapture::ByRef(BorrowKind::Immutable)
-                );
+                let is_shared_capture =
+                    matches!(capture.info.capture_kind, UpvarCapture::ByRef(BorrowKind::Immutable));
                 let implements_sync = !is_shared_capture
                     || self
                         .infcx
                         .type_implements_trait(sync_trait, [place_ty], self.param_env)
                         .must_apply_modulo_regions();
-                
+
                 // debug output
                 let capture_span = capture
                     .info

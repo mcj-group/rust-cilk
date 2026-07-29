@@ -1756,7 +1756,7 @@ impl<'a> State<'a> {
                 self.print_expr_cond_paren(
                     spawn.body,
                     self.precedence(spawn.body) < ExprPrecedence::Jump,
-                ); 
+                );
             }
             hir::ExprKind::CilkScope(block) => {
                 self.word_space("cilk_scope");
