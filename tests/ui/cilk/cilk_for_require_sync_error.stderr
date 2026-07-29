@@ -1,0 +1,8 @@
+error: variable captured for Cilk parallel runtime is not thread-safe
+  --> $DIR/cilk_for_require_sync_error.rs:15:32
+   |
+LL |         let value = Rc::clone(&value);
+   |                                ^^^^^ `Rc<RefCell<usize>>` does not implement `Sync`
+
+error: aborting due to 1 previous error
+
