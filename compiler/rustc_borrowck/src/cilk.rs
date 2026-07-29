@@ -34,7 +34,8 @@ use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
 use rustc_middle::mir::{
-    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, LocalInfo, Location, TerminatorKind,
+    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, LocalInfo, Location,
+    NonDivergingIntrinsic, StatementKind, SyncRegion, TerminatorKind,
 };
 use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
@@ -56,8 +57,8 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 
 /// Returns the set of [`BasicBlock`]s whose terminator is a [`TerminatorKind::Call`]
 /// to an orphaning closure — a closure bearing `#[orphaning]` synthesized during
-/// `cilk_spawn` lowering to wrap the spawn body. The corresponding `DefId` of the
-/// closure called is also returned.
+/// `cilk_for` lowering to wrap the spawn body. The corresponding `DefId` and
+/// [`SyncRegion`] of the closure call are also returned.
 ///
 /// Calling a closure does not produce a `Call` to the closure's own `DefId`.
 /// THIR lowering rewrites `closure()` into a call to the `Fn`/`FnMut`/`FnOnce`
@@ -69,7 +70,7 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 fn blocks_calling_orphaning_closure<'tcx>(
     body: &Body<'tcx>,
     tcx: TyCtxt<'tcx>,
-) -> FxIndexSet<(BasicBlock, BasicBlock, DefId)> {
+) -> FxIndexSet<(BasicBlock, BasicBlock, DefId, SyncRegion)> {
     let mut result = FxIndexSet::default();
     for (bb, bb_data) in body.basic_blocks.iter_enumerated() {
         let TerminatorKind::Call { ref func, target: Some(successor), .. } =
@@ -93,7 +94,27 @@ fn blocks_calling_orphaning_closure<'tcx>(
             continue;
         };
         if tcx.codegen_fn_attrs(closure_id).orphaning == OrphaningAttr::Hint {
-            result.insert((bb, successor, closure_id));
+            // finds the exact sync_region for the orphaning closure
+            let sync_region = body.basic_blocks[successor]
+                .statements
+                .iter()
+                .find_map(|stmt| {
+                    let StatementKind::Intrinsic(intrinsic) = &stmt.kind else {
+                        return None;
+                    };
+                    let NonDivergingIntrinsic::OrphaningSyncregion(sync_region) = &**intrinsic
+                    else {
+                        return None;
+                    };
+                    Some(*sync_region)
+                })
+                .unwrap_or_else(|| {
+                    bug!(
+                        "successor {successor:?} of orphaning closure call {bb:?} has no \
+                         OrphaningSyncregion marked."
+                    )
+                });
+            result.insert((bb, successor, closure_id, sync_region));
         }
     }
     result
@@ -129,7 +150,7 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
     let task_info = TaskInfo::from_body(body);
     for task in task_info.child_tasks() {
         let reattach_loc = task_info.expect_last_location(task);
-        let TerminatorKind::Reattach { sync_region: _, continuation } =
+        let TerminatorKind::Reattach { sync_region, continuation } =
             body.basic_blocks[reattach_loc.block].terminator().kind
         else {
             bug!(
@@ -137,7 +158,7 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
                 body.basic_blocks[reattach_loc.block].terminator().kind,
             );
         };
-        let points = continuation_points(body, continuation);
+        let points = continuation_points(body, continuation, sync_region);
         if points.is_empty() {
             continue;
         }
@@ -152,10 +173,10 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
         }
     }
 
-    for (orphaning_call_block, successor, orphaning_closure_id) in
+    for (orphaning_call_block, successor, orphaning_closure_id, sync_region) in
         blocks_calling_orphaning_closure(body, tcx)
     {
-        let points = continuation_points(body, successor);
+        let points = continuation_points(body, successor, sync_region);
         if points.is_empty() {
             continue;
         }
@@ -217,6 +238,7 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
 pub(crate) fn continuation_points<'tcx>(
     body: &Body<'tcx>,
     start_block: BasicBlock,
+    target_sync_region: SyncRegion,
 ) -> Vec<Location> {
     let mut queue = WorkQueue::with_none(body.basic_blocks.len());
     queue.insert(start_block);
@@ -238,8 +260,10 @@ pub(crate) fn continuation_points<'tcx>(
         }
 
         match bb_data.terminator().kind {
-            TerminatorKind::Sync { .. }
-            | TerminatorKind::Return
+            TerminatorKind::Sync { sync_region, .. } if target_sync_region == sync_region => {
+                // Stops at the matching sync region.
+            }
+            TerminatorKind::Return
             | TerminatorKind::UnwindResume
             | TerminatorKind::UnwindTerminate(_)
             | TerminatorKind::CoroutineDrop => {
