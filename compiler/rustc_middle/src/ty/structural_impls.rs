@@ -210,8 +210,6 @@ TrivialTypeTraversalImpls! {
     // tidy-alphabetical-start
     crate::infer::canonical::Certainty,
     crate::mir::BasicBlock,
-    crate::mir::SyncRegion,
-    crate::mir::Taskframe,
     crate::mir::BindingForm<'tcx>,
     crate::mir::BlockTailInfo,
     crate::mir::BorrowKind,

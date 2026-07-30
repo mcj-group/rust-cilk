@@ -120,9 +120,6 @@ pub(crate) struct Scopes<'tcx> {
     pub reattach_targets: Vec<BasicBlock>,
 
     pub sync_regions: Vec<SyncRegionState>,
-    next_sync_region: u32,
-
-    next_taskframe: u32,
 
     /// Drops that need to be done on unwind paths. See the comment on
     /// [DropTree] for more details.
@@ -495,7 +492,7 @@ pub(crate) enum SyncRegionState {
     /// been added to the MIR
     DeclaredWithoutSync,
     /// A sync region which has been added the MIR
-    Instatiated(SyncRegion),
+    Instatiated(Local),
     /// A sync region which has been declared, but not added to the MIR as it's not needed
     Ignored,
 }
@@ -509,8 +506,6 @@ impl<'tcx> Scopes<'tcx> {
             if_then_scope: None,
             reattach_targets: Vec::new(),
             sync_regions: Vec::new(),
-            next_sync_region: 0,
-            next_taskframe: 0,
             unwind_drops: DropTree::new(),
             coroutine_drops: DropTree::new(),
         }
@@ -547,15 +542,13 @@ impl<'tcx> Scopes<'tcx> {
         self.scopes.last().expect("topmost_scope: no scopes present").region_scope
     }
 
-    pub(crate) fn enter_sync_region(&mut self) {
-        let sync_region = SyncRegion::from_u32(self.next_sync_region);
+    pub(crate) fn enter_sync_region(&mut self, sync_region: Local) {
         let top = self.sync_regions.last_mut().expect("setting to empty sync region stack");
         assert!(matches!(top, SyncRegionState::Declared | SyncRegionState::DeclaredWithoutSync));
         *top = SyncRegionState::Instatiated(sync_region);
-        self.next_sync_region += 1;
     }
 
-    pub(crate) fn current_sync_region(&self) -> SyncRegion {
+    pub(crate) fn current_sync_region(&self) -> Local {
         if let SyncRegionState::Instatiated(sync_region) =
             self.sync_regions.last().expect("no usable sync regions")
         {
@@ -563,12 +556,6 @@ impl<'tcx> Scopes<'tcx> {
         } else {
             panic!("uninitialized sync region");
         }
-    }
-
-    pub(crate) fn get_taskframe(&mut self) -> Taskframe {
-        let taskframe = Taskframe::from_u32(self.next_taskframe);
-        self.next_taskframe += 1;
-        taskframe
     }
 }
 
