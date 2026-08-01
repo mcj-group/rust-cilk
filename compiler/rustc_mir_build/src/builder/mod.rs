@@ -259,8 +259,16 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
         self.var_indices[&id].local_id(for_guard)
     }
 
+    /// Creates a fresh local used to tag the `TaskframeCreate`/`TaskframeUse`/`TaskframeEnd`
+    fn get_taskframe(&mut self, source_info: SourceInfo) -> Local {
+        self.local_decls.push(LocalDecl::with_source_info(self.tcx.types.unit, source_info))
+    }
+
     fn create_sync_region(&mut self, bb: BasicBlock, source_info: SourceInfo) {
-        self.scopes.enter_sync_region();
+        let sync_region =
+            self.local_decls.push(LocalDecl::with_source_info(self.tcx.types.unit, source_info));
+
+        self.scopes.enter_sync_region(sync_region);
         self.cfg.push(
             bb,
             Statement::new(

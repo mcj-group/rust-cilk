@@ -94,7 +94,7 @@ impl<'tcx> Visitor<'tcx> for CostChecker<'_, 'tcx> {
                     | NonDivergingIntrinsic::TaskframeUse(_)
                     | NonDivergingIntrinsic::TaskframeEnd(_)
                     | NonDivergingIntrinsic::TapirSyncRegionStart(_)
-                    | NonDivergingIntrinsic::OrphaningSyncregion(_) => 10000,
+                    | NonDivergingIntrinsic::OrphaningSyncregion(_) => INSTR_COST,
                 };
             }
             StatementKind::Assign(..) => self.penalty += INSTR_COST,

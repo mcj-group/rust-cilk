@@ -14,7 +14,6 @@ use rustc_span::def_id::LocalDefId;
 use rustc_span::source_map::Spanned;
 use rustc_span::{Span, Symbol};
 use rustc_target::asm::InlineAsmRegOrRegClass;
-use serde::Serialize;
 use smallvec::SmallVec;
 
 use super::{BasicBlock, Const, Local, UserTypeProjection};
@@ -520,18 +519,18 @@ pub enum NonDivergingIntrinsic<'tcx> {
     TapirRuntimeStop,
 
     // / Denotes a call to the intrinsic function `llvm.taskframe.create`.
-    TaskframeCreate(Taskframe),
+    TaskframeCreate(Local),
 
     /// Denotes a call to the intrinsic function `llvm.taskframe.use`.
-    TaskframeUse(Taskframe),
+    TaskframeUse(Local),
 
     /// Denotes a call to the intrinsic function `llvm.taskframe.end`.
-    TaskframeEnd(Taskframe),
+    TaskframeEnd(Local),
 
-    TapirSyncRegionStart(SyncRegion),
+    TapirSyncRegionStart(Local),
 
     /// Inserted in the parent function to indicate the syncregion that the child's root syncregion should be mapped to
-    OrphaningSyncregion(SyncRegion),
+    OrphaningSyncregion(Local),
 }
 
 /// Describes what kind of retag is to be performed.
@@ -694,26 +693,6 @@ pub enum InlineAsmMacro {
     Asm,
     /// The `naked_asm!` macro
     NakedAsm,
-}
-
-rustc_index::newtype_index! {
-    #[derive(HashStable, Serialize)]
-    #[encodable]
-    #[orderable]
-    #[debug_format = "sr{}"]
-    /// Every detach reattach and sync is tagged with a sync region
-    ///
-    /// a sync only syncs tasks in the same sync region
-    pub struct SyncRegion {}
-}
-
-rustc_index::newtype_index! {
-    #[derive(HashStable, Serialize)]
-    #[encodable]
-    #[orderable]
-    #[debug_format = "tf{}"]
-    /// The TaskframeCreate and TaskframeUse intrinsics must be tagged so we can associate them
-    pub struct Taskframe {}
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1038,7 +1017,7 @@ pub enum TerminatorKind<'tcx> {
     /// Represents an opportunity for logical parallelism: the spawned task and continuation can
     /// run in parallel. Convention: the spawned task is "to the left", so it should be listed
     /// first.
-    Detach { sync_region: SyncRegion, spawned_task: BasicBlock, continuation: BasicBlock },
+    Detach { sync_region: Local, spawned_task: BasicBlock, continuation: BasicBlock },
 
     /// For a spawned task, allows to resume and execute the original continuation. Cilk is
     /// continuation-stealing so the spawned task will immediately execute, but this should not change
@@ -1046,12 +1025,12 @@ pub enum TerminatorKind<'tcx> {
     // NOTE(jhilton): when we codegen a reattach, we make sure that the assignment happens before the terminator,
     // so we shouldn't need to make the edges of some type that expresses that we're going to assign. This simplifies
     // generating LLVM IR so that we don't have to duplicate the code of an assignment.
-    Reattach { sync_region: SyncRegion, continuation: BasicBlock },
+    Reattach { sync_region: Local, continuation: BasicBlock },
 
     /// Marks a basic block terminated by a cilk_sync, which waits for spawned tasks to complete.
     /// Representing Sync as a terminator means that we can assume any block after a sync which is not
     /// after a spawn is completely serial, which is easier to conclude than if Sync was a statement.
-    Sync { sync_region: SyncRegion, target: BasicBlock },
+    Sync { sync_region: Local, target: BasicBlock },
 }
 
 #[derive(
