@@ -30,7 +30,7 @@ use rustc_middle::ty::{
 };
 use rustc_middle::{bug, span_bug};
 use rustc_session::lint;
-use rustc_span::Span;
+use rustc_span::{Span, sym};
 use rustc_span::def_id::LocalDefId;
 use rustc_span::hygiene::DesugaringKind;
 use rustc_trait_selection::error_reporting::infer::need_type_info::TypeAnnotationNeeded;
@@ -429,6 +429,30 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         def_id: DefId,
     ) {
         self.register_bound(ty, def_id, self.cause(span, code));
+    }
+
+    pub(crate) fn require_type_is_send(
+        &self,
+        ty: Ty<'tcx>,
+        span: Span,
+        code: traits::ObligationCauseCode<'tcx>,
+    ) {
+        if !ty.references_error() {
+            let send_trait = self.tcx.get_diagnostic_item(sym::Send).unwrap();
+            self.require_type_meets(ty, span, code, send_trait);
+        }
+    }
+
+    pub(crate) fn require_type_is_sync(
+        &self,
+        ty: Ty<'tcx>,
+        span: Span,
+        code: traits::ObligationCauseCode<'tcx>,
+    ) {
+        if !ty.references_error() {
+            let sync_trait = self.tcx.require_lang_item(LangItem::Sync, span);
+            self.require_type_meets(ty, span, code, sync_trait);
+        }
     }
 
     pub(crate) fn require_type_is_sized(

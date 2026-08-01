@@ -1390,21 +1390,3 @@ pub(crate) struct ProjectOnNonPinProjectType {
     )]
     pub sugg_span: Option<Span>,
 }
-
-#[derive(Diagnostic)]
-#[diag("variable captured for Cilk parallel runtime is not thread-safe")]
-pub(crate) struct CilkSpawnCaptureNotSend<'tcx> {
-    #[primary_span]
-    #[label("`{$ty}` does not implement `Send`")]
-    pub span: Span,
-    pub ty: Ty<'tcx>,
-}
-
-#[derive(Diagnostic)]
-#[diag("variable captured for Cilk parallel runtime is not thread-safe")]
-pub(crate) struct CilkSpawnCaptureNotSync<'tcx> {
-    #[primary_span]
-    #[label("`{$ty}` does not implement `Sync`")]
-    pub span: Span,
-    pub ty: Ty<'tcx>,
-}

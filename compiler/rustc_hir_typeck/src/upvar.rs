@@ -209,10 +209,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let typeck_results = self.typeck_results.borrow();
         let min_captures = typeck_results.closure_min_captures.get(&spawn_def_id)?;
 
-        // gets `Send` and `Sync` traits item
-        let send_trait = self.tcx.get_diagnostic_item(sym::Send)?;
-        let sync_trait = self.tcx.lang_items().sync_trait()?;
-
         // loops through every UpVars in CilkSpawn and checks if all captures can be implemented `Send` and/or `Sync` trait.
         // For any UpVars, it should implement `Send` to be used in CilkSpawn
         // For any &T captured, it should also implement `Sync` to share across threads.
@@ -220,7 +216,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         // captured fields not the entire root variable.
         for (&var_hir_id, upvar) in upvars {
             for capture in min_captures.get(&var_hir_id).into_iter().flatten() {
-                // gets the type of the cpature
+                // gets the type of the capture
                 let place_ty = self.resolve_vars_if_possible(capture.place.ty());
                 let capture_ty = apply_capture_kind_on_capture_ty(
                     self.tcx,
@@ -230,37 +226,19 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 );
                 let capture_ty = self.resolve_vars_if_possible(capture_ty);
 
-                // checks if the capture can implement `Send`
-                let implements_send = self
-                    .infcx
-                    .type_implements_trait(send_trait, [capture_ty], self.param_env)
-                    .must_apply_modulo_regions();
-
-                // if it is a &T, checks additionally if it can implement `Sync`
-                let is_shared_capture =
-                    matches!(capture.info.capture_kind, UpvarCapture::ByRef(BorrowKind::Immutable));
-                let implements_sync = !is_shared_capture
-                    || self
-                        .infcx
-                        .type_implements_trait(sync_trait, [place_ty], self.param_env)
-                        .must_apply_modulo_regions();
-
-                // debug output
                 let capture_span = capture
                     .info
                     .path_expr_id
                     .map(|hir_id| self.tcx.hir_span(hir_id))
                     .unwrap_or(upvar.span);
-                if !implements_sync {
-                    self.dcx().emit_err(crate::errors::CilkSpawnCaptureNotSync {
-                        span: capture_span,
-                        ty: place_ty,
-                    });
-                } else if !implements_send {
-                    self.dcx().emit_err(crate::errors::CilkSpawnCaptureNotSend {
-                        span: capture_span,
-                        ty: capture_ty,
-                    });
+                let is_shared_capture =
+                    matches!(capture.info.capture_kind, UpvarCapture::ByRef(BorrowKind::Immutable));
+
+                // registers the obligation requirements, which will be checked after type inference
+                if is_shared_capture {
+                    self.require_type_is_sync(place_ty, capture_span, ObligationCauseCode::Misc);
+                } else {
+                    self.require_type_is_send(capture_ty, capture_span, ObligationCauseCode::Misc);
                 }
             }
         }
