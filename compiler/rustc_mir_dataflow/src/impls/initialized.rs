@@ -541,11 +541,18 @@ impl GenKill<MovePathIndex> for MaybeUninitializedPlacesDomain {
 impl JoinSemiLattice for MaybeUninitializedPlacesDomain {
     fn join(&mut self, other: &Self) -> bool {
         if other.from_reattach {
-            // upon a reattach edge, unset any children bits that were initialized in the spawned task
-            // this change will propagate to .current when we reach a sync
-            self.children.intersect(&other.children)
+            // if the child task initialized variables, propagate them to the parent's child bits
+            // if the child task uninitialized variables, propagate them to the parent's current and child bits i.e. the
+            // variable becomes unavailable immediately
+
+            let mut initialized_by_child = self.current.clone();
+            initialized_by_child.subtract(&other.current);
+            let mut uninitialized_by_child = other.current.clone();
+            uninitialized_by_child.subtract(&self.current);
+
+            self.children.subtract(&initialized_by_child) | self.children.join(&uninitialized_by_child) | self.current.join(&uninitialized_by_child)
         } else {
-            self.current.join(&other.current) && self.children.join(&other.children)
+            self.current.join(&other.current) | self.children.join(&other.children)
         }
     }
 }

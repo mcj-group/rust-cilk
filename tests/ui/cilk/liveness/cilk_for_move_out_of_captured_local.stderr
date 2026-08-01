@@ -1,0 +1,23 @@
+error[E0382]: use of moved value: `s`
+  --> $DIR/cilk_for_move_out_of_captured_local.rs:16:25
+   |
+LL |       let s = String::new();
+   |           - move occurs because `s` has type `String`, which does not implement the `Copy` trait
+LL |       cilk_for i in 0..10 {
+   |  _____-------------------_^
+   | |     |
+   | |     inside of this loop
+LL | |
+LL | |         drop(s);
+   | |              - use occurs due to use in closure
+LL | |     };
+   | |_____^ value moved into closure here, in previous iteration of loop
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+LL |         drop(s.clone());
+   |               ++++++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0382`.
