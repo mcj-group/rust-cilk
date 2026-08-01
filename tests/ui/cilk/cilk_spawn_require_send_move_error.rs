@@ -10,6 +10,6 @@ use std::rc::Rc;
 fn main() {
     let value = Rc::new(1_usize);
     cilk_spawn {
-        drop(value); //~ ERROR variable captured for Cilk parallel runtime is not thread-safe
+        drop(value); //~ ERROR `Rc<usize>` cannot be sent between threads safely
     };
 }

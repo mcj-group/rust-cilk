@@ -10,7 +10,7 @@ use std::rc::Rc;
 fn main() {
     let values = vec![Rc::new(1_usize)];
     cilk_for value in values {
-             //~^ ERROR variable captured for Cilk parallel runtime is not thread-safe
+             //~^ ERROR `Rc<usize>` cannot be sent between threads safely
         drop(value);
     }
 }

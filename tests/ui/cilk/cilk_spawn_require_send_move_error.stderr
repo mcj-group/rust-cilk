@@ -1,8 +1,11 @@
-error: variable captured for Cilk parallel runtime is not thread-safe
+error[E0277]: `Rc<usize>` cannot be sent between threads safely
   --> $DIR/cilk_spawn_require_send_move_error.rs:13:14
    |
 LL |         drop(value);
-   |              ^^^^^ `Rc<usize>` does not implement `Send`
+   |              ^^^^^ `Rc<usize>` cannot be sent between threads safely
+   |
+   = help: the trait `Send` is not implemented for `Rc<usize>`
 
 error: aborting due to 1 previous error
 
+For more information about this error, try `rustc --explain E0277`.

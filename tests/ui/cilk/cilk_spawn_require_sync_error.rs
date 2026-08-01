@@ -11,7 +11,7 @@ use std::rc::Rc;
 fn main() {
     let value = Rc::new(RefCell::new(1_usize));
     cilk_spawn {
-        let value = Rc::clone(&value); //~ ERROR variable captured for Cilk parallel runtime is not thread-safe
+        let value = Rc::clone(&value); //~ ERROR `Rc<RefCell<usize>>` cannot be shared between threads safely
         value.replace_with(|n| *n + 1);
     };
 }
