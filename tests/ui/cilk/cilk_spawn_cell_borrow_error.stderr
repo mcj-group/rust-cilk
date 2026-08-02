@@ -1,0 +1,12 @@
+error[E0277]: `Cell<i32>` cannot be shared between threads safely
+  --> $DIR/cilk_spawn_cell_borrow_error.rs:14:9
+   |
+LL |         cell.replace(1);
+   |         ^^^^ `Cell<i32>` cannot be shared between threads safely
+   |
+   = help: the trait `Sync` is not implemented for `Cell<i32>`
+   = note: if you want to do aliasing and mutation between multiple threads, use `std::sync::RwLock` or `std::sync::atomic::AtomicI32` instead
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.
