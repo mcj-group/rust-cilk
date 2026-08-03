@@ -1,13 +1,15 @@
 #![feature(cilk)]
 // Reproduces internal compiler error with consume_iter from Rayon code.
 // At some point we would expect this to fail since it has concurrent
-// mutable access to the iterator, so this is marked as known-bug.
+// mutable access to the iterator. It is now failing because no generic `T` 
+// requires to be `Sync` even being accessed through pointers. So it is marked
+// as a known-bug.
 
 //@ known-bug: unknown
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
 
-struct Ptr<T>(*mut T);
+struct Ptr<T:Sync>(*mut T);
 
 struct Foo<T> {
     start: Ptr<T>,
