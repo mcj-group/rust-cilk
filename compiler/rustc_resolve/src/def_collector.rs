@@ -403,7 +403,7 @@ impl<'a, 'ra, 'tcx> visit::Visitor<'a> for DefCollector<'a, 'ra, 'tcx> {
                 // FIXME(Shengwen Chang): Keep the synthetic closure `DefId` from becoming the
                 // parent definition of definitions nested in the spawn body.
                 // This minimal change avoids type-checking failures for definitions nested in a
-                // spawn body. In the future, if more analysis is performed at the HIR level, 
+                // spawn body. In the future, if more analysis is performed at the HIR level,
                 // consider making `CilkSpawn` a formal `DefKind` with its own analysis path.
                 self.invocation_parent.parent_def
             }
