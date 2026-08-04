@@ -1,0 +1,11 @@
+error[E0277]: `Rc<usize>` cannot be sent between threads safely
+  --> $DIR/cilk_for_require_send_move_error.rs:12:14
+   |
+LL |     cilk_for value in values {
+   |              ^^^^^ `Rc<usize>` cannot be sent between threads safely
+   |
+   = help: the trait `Send` is not implemented for `Rc<usize>`
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0277`.

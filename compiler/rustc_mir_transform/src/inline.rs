@@ -1004,9 +1004,7 @@ fn inline_call<'tcx, I: Inliner<'tcx>>(
             .push(LocalDecl::with_source_info(tcx.types.unit, callsite.source_info));
         caller_body.basic_blocks_mut()[callsite.block].statements.push(Statement::new(
             callsite.source_info,
-            StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeCreate(
-                taskframe,
-            ))),
+            StatementKind::Intrinsic(Box::new(NonDivergingIntrinsic::TaskframeCreate(taskframe))),
         ));
         caller_body.basic_blocks_mut()[return_block.unwrap()].statements.push(Statement::new(
             callsite.source_info,

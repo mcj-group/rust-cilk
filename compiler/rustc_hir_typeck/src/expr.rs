@@ -418,7 +418,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 self.check_expr_unsafe_binder_cast(expr.span, kind, inner_expr, ty, expected)
             }
             ExprKind::Err(guar) => Ty::new_error(tcx, guar),
-            ExprKind::CilkSpawn(expr) => self.check_expr(expr),
+            ExprKind::CilkSpawn(spawn) => self.check_expr(spawn.body),
             ExprKind::CilkScope(block) => self.check_expr_block(block, expected),
             ExprKind::CilkSync => tcx.types.unit,
             ExprKind::Reattach => tcx.types.unit,

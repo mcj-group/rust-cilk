@@ -573,6 +573,18 @@ impl<'a, 'hir> LoweringContext<'a, 'hir> {
         span: Span,
     ) -> LocalDefId {
         let parent = self.current_hir_id_owner.def_id;
+        self.create_def_with_parent(parent, node_id, name, def_kind, def_path_data, span)
+    }
+
+    fn create_def_with_parent(
+        &mut self,
+        parent: LocalDefId,
+        node_id: ast::NodeId,
+        name: Option<Symbol>,
+        def_kind: DefKind,
+        def_path_data: DefPathData,
+        span: Span,
+    ) -> LocalDefId {
         assert_ne!(node_id, ast::DUMMY_NODE_ID);
         assert!(
             self.opt_local_def_id(node_id).is_none(),
