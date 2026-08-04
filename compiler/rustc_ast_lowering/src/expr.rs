@@ -9,6 +9,7 @@ use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_errors::{DiagCtxtHandle, msg};
 use rustc_hir as hir;
 use rustc_hir::def::{DefKind, Res};
+use rustc_hir::def_id::LocalDefId;
 use rustc_hir::definitions::DefPathData;
 use rustc_hir::{HirId, Target, find_attr};
 use rustc_middle::span_bug;
@@ -494,7 +495,10 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     //  In the mean time, we're doing a little extra work to make the temporary expression and pass it along into the next IR.
                     let block = self.lower_block(&*body_clone, false);
                     let expr = self.expr_block(block);
-                    hir::ExprKind::CilkSpawn(self.arena.alloc(expr))
+                    hir::ExprKind::CilkSpawn(self.arena.alloc(hir::CilkSpawn {
+                        def_id: self.local_def_id(e.id),
+                        body: self.arena.alloc(expr),
+                    }))
                 }
                 ExprKind::CilkScope(body) => {
                     let block = self.lower_block(body, false);
@@ -2159,20 +2163,23 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 );
                 let spawn_block =
                     self.arena.alloc(hir::Block { stmts: spawned_stmts, ..*body_block });
-                // Wrap the body in a cilk_spawn
-                let spawn_expr_val: rustc_hir::Expr<'_> = self.expr_spawn_block(spawn_block);
-                let spawn_expr = self.arena.alloc(spawn_expr_val);
-                let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
-                let stmts_slice = self.arena.alloc_from_iter([shadow_local_stmt, spawn_stmt]);
 
                 // Look up the closure DefId that was pre-registered during name resolution
                 // (in def_collector.rs). Using local_def_id here (rather than create_def)
                 // ensures the disambiguator is shared with the resolver, preventing a
                 // DefPathHash collision with user-written closures inside the loop body.
-                let closure_hir_id = self.next_id();
                 let closure_def_id = self.local_def_id(cilk_closure_node_id);
+                let closure_hir_id = self.next_id();
                 // Register the closure DefId
                 self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
+
+                // Wrap the body in a cilk_spawn
+                // the fake closure def_id created for cilk_spawn is a child of the outer closure
+                let spawn_expr_val: rustc_hir::Expr<'_> =
+                    self.expr_spawn_block(spawn_block, closure_def_id);
+                let spawn_expr = self.arena.alloc(spawn_expr_val);
+                let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
+                let stmts_slice = self.arena.alloc_from_iter([shadow_local_stmt, spawn_stmt]);
 
                 // Create the closure body
                 let inner_block = self.block_all(body_block.span, stmts_slice, None);
@@ -2781,9 +2788,29 @@ impl<'hir> LoweringContext<'_, 'hir> {
         self.expr(b.span, hir::ExprKind::Block(b, None))
     }
 
-    fn expr_spawn_block(&mut self, b: &'hir hir::Block<'hir>) -> hir::Expr<'hir> {
+    fn expr_spawn_block(
+        &mut self,
+        b: &'hir hir::Block<'hir>,
+        parent_def_id: LocalDefId,
+    ) -> hir::Expr<'hir> {
         let block = self.arena.alloc(self.expr_block(b));
-        self.expr(b.span, hir::ExprKind::CilkSpawn(block))
+        let spawn_node_id = self.next_node_id();
+        let spawn_def_id = self.create_def_with_parent(
+            parent_def_id,
+            spawn_node_id,
+            None,
+            DefKind::Closure,
+            DefPathData::Closure,
+            b.span,
+        );
+        let spawn_hir_id = self.lower_node_id(spawn_node_id);
+        hir::Expr {
+            hir_id: spawn_hir_id,
+            kind: hir::ExprKind::CilkSpawn(
+                self.arena.alloc(hir::CilkSpawn { def_id: spawn_def_id, body: block }),
+            ),
+            span: b.span,
+        }
     }
 
     /// Wrap an expression in a block, and wrap that block in an expression again.

@@ -16,20 +16,37 @@ pub(crate) fn provide(providers: &mut Providers) {
         }
 
         let local_def_id = def_id.expect_local();
-        let body = tcx.hir_maybe_body_owned_by(local_def_id)?;
+        if let Some(body) = tcx.hir_maybe_body_owned_by(local_def_id) {
+            let mut local_collector = LocalCollector::default();
+            local_collector.visit_body(body);
+            let mut capture_collector = CaptureCollector {
+                tcx,
+                locals: &local_collector.locals,
+                upvars: FxIndexMap::default(),
+            };
+            capture_collector.visit_body(body);
 
-        let mut local_collector = LocalCollector::default();
-        local_collector.visit_body(&body);
+            if !capture_collector.upvars.is_empty() {
+                Some(tcx.arena.alloc(capture_collector.upvars))
+            } else {
+                None
+            }
+        } else if let Some(spawn_body) = tcx.hir_maybe_cilk_spawn_owned_by(local_def_id) {
+            // allows UpVar analysis on CilkSpawn expr
+            let mut local_collector = LocalCollector::default();
+            local_collector.visit_expr(spawn_body);
+            let mut capture_collector = CaptureCollector {
+                tcx,
+                locals: &local_collector.locals,
+                upvars: FxIndexMap::default(),
+            };
+            capture_collector.visit_expr(spawn_body);
 
-        let mut capture_collector = CaptureCollector {
-            tcx,
-            locals: &local_collector.locals,
-            upvars: FxIndexMap::default(),
-        };
-        capture_collector.visit_body(&body);
-
-        if !capture_collector.upvars.is_empty() {
-            Some(tcx.arena.alloc(capture_collector.upvars))
+            if !capture_collector.upvars.is_empty() {
+                Some(tcx.arena.alloc(capture_collector.upvars))
+            } else {
+                None
+            }
         } else {
             None
         }

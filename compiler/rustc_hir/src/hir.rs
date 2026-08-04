@@ -1677,6 +1677,16 @@ pub struct Crate<'hir> {
     pub opt_hir_hash: Option<Fingerprint>,
 }
 
+/// A closure-like def_id is created to CilkSpawn so CilkSpawn could fall into the
+/// InferBorrowKindVisitor pass similar to a closure, where the types of variables inside CilkSpawn
+/// is inferred as if inside a closure. This provides info on the borrow types inside
+/// CilkSpawn and thus enable `Send` and `Sync` trait checks for UpVars.
+#[derive(Debug, Clone, Copy, HashStable_Generic)]
+pub struct CilkSpawn<'hir> {
+    pub def_id: LocalDefId,
+    pub body: &'hir Expr<'hir>,
+}
+
 #[derive(Debug, Clone, Copy, HashStable_Generic)]
 pub struct Closure<'hir> {
     pub def_id: LocalDefId,
@@ -2941,7 +2951,7 @@ pub enum ExprKind<'hir> {
     /// e.g. `unsafe<'a> &'a i32` <=> `&i32`.
     UnsafeBinderCast(UnsafeBinderCastKind, &'hir Expr<'hir>, Option<&'hir Ty<'hir>>),
     /// An expression that makes the right-hand side potentially parallel with the continuation.
-    CilkSpawn(&'hir Expr<'hir>),
+    CilkSpawn(&'hir CilkSpawn<'hir>),
 
     /// An expression that implicitly syncs at the end of the contained block.
     CilkScope(&'hir Block<'hir>),
