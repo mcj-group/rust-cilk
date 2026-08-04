@@ -245,7 +245,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     // For any &T captured, it should also implement `Sync` to share across threads.
     // Disjoint capture in closure proposed in RFC2229 and implemented starting from Rust 2021 is followed here as we only check the
     // captured fields not the entire root variable.
-    // For raw_ptr types, the pointee should be Sync to allow shared reference across threads whereas pointer validity, memory safety 
+    // For raw_ptr types, the pointee should be Sync to allow shared reference across threads whereas pointer validity, memory safety
     // when using pointer, aliasing and data race conditions remain the responsibility of programmer as `unsafe` is used.
     fn require_cilk_thread_safe(
         &self,

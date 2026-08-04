@@ -35,7 +35,7 @@ use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
 use rustc_middle::mir::{
     BasicBlock, Body, BorrowKind, ConstraintCategory, Local, LocalInfo, Location,
-    NonDivergingIntrinsic, StatementKind, SyncRegion, TerminatorKind,
+    NonDivergingIntrinsic, StatementKind, TerminatorKind,
 };
 use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
@@ -58,7 +58,7 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 /// Returns the set of [`BasicBlock`]s whose terminator is a [`TerminatorKind::Call`]
 /// to an orphaning closure — a closure bearing `#[orphaning]` synthesized during
 /// `cilk_for` lowering to wrap the spawn body. The corresponding `DefId` and
-/// [`SyncRegion`] of the closure call are also returned.
+/// [`Local`] identifying the sync region of the closure call are also returned.
 ///
 /// Calling a closure does not produce a `Call` to the closure's own `DefId`.
 /// THIR lowering rewrites `closure()` into a call to the `Fn`/`FnMut`/`FnOnce`
@@ -70,7 +70,7 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 fn blocks_calling_orphaning_closure<'tcx>(
     body: &Body<'tcx>,
     tcx: TyCtxt<'tcx>,
-) -> FxIndexSet<(BasicBlock, BasicBlock, DefId, SyncRegion)> {
+) -> FxIndexSet<(BasicBlock, BasicBlock, DefId, Local)> {
     let mut result = FxIndexSet::default();
     for (bb, bb_data) in body.basic_blocks.iter_enumerated() {
         let TerminatorKind::Call { ref func, target: Some(successor), .. } =
@@ -238,7 +238,7 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
 pub(crate) fn continuation_points<'tcx>(
     body: &Body<'tcx>,
     start_block: BasicBlock,
-    target_sync_region: SyncRegion,
+    target_sync_region: Local,
 ) -> Vec<Location> {
     let mut queue = WorkQueue::with_none(body.basic_blocks.len());
     queue.insert(start_block);
