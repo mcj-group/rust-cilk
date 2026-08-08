@@ -154,7 +154,7 @@ impl MutVisitor for CilkControlFlow<'_> {
                     if label.is_some() && *label == outer_label
                         || label.is_none() && self.inner_labels.is_empty()
                     {
-                        *kind = ExprKind::Reattach;
+                        *kind = ExprKind::Ret(None);
                     } else if label.is_some() && !self.inner_labels.contains(label) {
                         *kind = self.emit_bad_control_flow(*span, "continue");
                     } else {

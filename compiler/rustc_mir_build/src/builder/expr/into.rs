@@ -883,6 +883,9 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                 // block that just reattaches
                 // multiple blocks can branch to it instead of having more than one reattach
+//
+                // branching to a reattach block was done to handle reattaches in hir
+                // we don't use these at the moment
                 let reattach_block = this.cfg.start_new_block();
 
                 let taskframe = this.get_taskframe(source_info);
