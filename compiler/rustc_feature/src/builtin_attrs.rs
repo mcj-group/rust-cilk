@@ -743,7 +743,7 @@ pub static BUILTIN_ATTRIBUTES: &[BuiltinAttribute] = &[
         inline, Normal,
         template!(
             Word,
-            List: &["always", "never"],
+            List: &["always", "never", "backend"],
             "https://doc.rust-lang.org/reference/attributes/codegen.html#the-inline-attribute"
         ),
         FutureWarnFollowing, EncodeCrossCrate::No

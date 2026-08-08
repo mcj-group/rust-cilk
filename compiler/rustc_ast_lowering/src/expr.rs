@@ -2153,7 +2153,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     span: self.lower_span(body_block.span),
                 };
 
-                // Create the inline attribute
+                // Create the inline attribute. `backend` prevents the closure from being inlined during mir,
+                // but forces it during backend (llvm) lowering
                 self.lower_attrs(
                     closure_hir_id,
                     &[attr::mk_attr_nested_word(
@@ -2161,7 +2162,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                         AttrStyle::Outer,
                         Safety::Default,
                         sym::inline,
-                        sym::always,
+                        sym::backend,
                         head_span, // TODO: is this the correct span?
                     )],
                     self.lower_span(body_block.span),

@@ -806,6 +806,10 @@ fn check_codegen_attributes<'tcx, I: Inliner<'tcx>>(
         return Err("never inline attribute");
     }
 
+    if let InlineAttr::Backend = callee_attrs.inline {
+        return Err("inlining left to the backend");
+    }
+
     if let OrphaningAttr::Hint = callee_attrs.orphaning {
         return Err("never inline orphaning function");
     }

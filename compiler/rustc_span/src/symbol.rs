@@ -518,6 +518,7 @@ symbols! {
         avx512bw,
         avx512f,
         await_macro,
+        backend,
         bang,
         begin_panic,
         bench,
