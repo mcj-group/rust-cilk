@@ -2020,7 +2020,8 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 // create NodeId and Ident for shadowing variable
                 let shadow_node_id = self.next_node_id();
-                let shadow_ident = rustc_span::symbol::Ident::from_str("shadow");
+                let shadow_ident =
+                    rustc_span::symbol::Ident::with_dummy_span(induction_var_ident.name);
 
                 // create PathSegment for induction variable (we use PathSegment to reference objects in Paths a.k.a namespaces)
                 let mut pathsegs = ThinVec::new();
