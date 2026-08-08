@@ -969,6 +969,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             fn_arg_span: None,
             kind: hir::ClosureKind::Coroutine(coroutine_kind),
             constness: hir::Constness::NotConst,
+            move_ident: None,
         }))
     }
 
@@ -1278,6 +1279,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             fn_arg_span: Some(self.lower_span(fn_arg_span)),
             kind: closure_kind,
             constness: self.lower_constness(constness),
+            move_ident: None,
         });
 
         hir::ExprKind::Closure(c)
@@ -1395,6 +1397,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
             // "coroutine that returns &str", rather than directly returning a `&str`.
             kind: hir::ClosureKind::CoroutineClosure(coroutine_desugaring),
             constness: hir::Constness::NotConst,
+            move_ident: None,
         });
         hir::ExprKind::Closure(c)
     }
@@ -1998,7 +2001,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
         };
 
         // Some(<pat>) => <body>,
-        // For cilk_for we instead perform Some(<pat>) => call < closure < cilk_spawn <body> > >.
+        // For cilk_for we instead perform Some(<pat>) => cilk_spawn < call < closure <body> > >.
         let some_arm = {
             let some_pat = self.pat_some(pat_span, pat);
 
@@ -2080,75 +2083,18 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     hir::LocalSource::Normal, // idk if this is correct
                 );
 
-                // create NodeId and Ident for shadow_copy variable
-                let shadow_copy_node_id = self.next_node_id();
-                // prefix name with _ so that there's no warning if the induction variables is unused
-                let shadow_copy_ident = rustc_span::symbol::Ident::from_str("_shadow_copy");
-
-                let ast_pathseg_id = self.next_node_id();
-
-                self.resolver.partial_res_map.insert(ast_pathseg_id, shadow_res);
-                self.resolver.partial_res_map.insert(shadow_copy_node_id, shadow_res);
-
-                // create the init for shadow_copy (shadow_copy = shadow)
-                let mut shadow_copy_pathsegs = ThinVec::new();
-                shadow_copy_pathsegs.push(PathSegment {
-                    ident: shadow_ident,
-                    id: ast_pathseg_id,
-                    args: None,
-                });
-                let shadow_copy_init = Some(self.lower_expr(&ast::Expr {
-                    span: shadow_pat.span,
-                    attrs: ThinVec::new(),
-                    tokens: None,
-                    id: shadow_copy_node_id,
-                    kind: ExprKind::Path(
-                        None,
-                        ast::Path {
-                            span: shadow_pat.span,
-                            tokens: None,
-                            segments: shadow_copy_pathsegs,
-                        },
-                    ),
-                }));
-
-                // create Pat for shadow_copy variable
-                let shadow_copy_pat_id = self.next_node_id();
-                let shadow_copy_pat = self.lower_pat(&ast::Pat {
-                    id: shadow_copy_pat_id,
-                    kind: PatKind::Ident(
-                        ast::BindingMode(ByRef::No, Mutability::Not),
-                        shadow_copy_ident,
-                        None,
-                    ),
-                    span: shadow_pat.span,
-                    tokens: None,
-                });
-
-                let shadow_copy_res =
-                    rustc_hir::def::PartialRes::new(Res::Local(shadow_copy_pat_id));
-
-                // create Local statement for shadow_copy
-                let shadow_copy_local_stmt = self.stmt_let_pat(
-                    None,
-                    pat_span,
-                    shadow_copy_init,
-                    shadow_copy_pat,
-                    hir::LocalSource::Normal,
-                );
-
                 let mut body_clone: Box<Block> = body.clone();
                 let mut map_targets: Vec<NodeId> = Vec::new();
                 // create new ReplaceVariable visitor
                 let mut var_visitor = ReplaceVariable {
                     target_ident: induction_var_ident,
-                    new_ident: shadow_copy_ident,
+                    new_ident: shadow_ident,
                     map_targets: &mut map_targets,
                 };
                 // visit body block
                 var_visitor.visit_block(&mut body_clone);
                 for node_id in &map_targets {
-                    self.resolver.partial_res_map.insert(*node_id, shadow_copy_res);
+                    self.resolver.partial_res_map.insert(*node_id, shadow_res);
                 }
 
                 let dcx = self.dcx();
@@ -2157,12 +2103,12 @@ impl<'hir> LoweringContext<'_, 'hir> {
 
                 let body_block =
                     self.with_loop_scope(loop_hir_id, |this| this.lower_block(&*body_clone, false));
-                // Place shadow_copy_local_stmt right before body_block in the spawned block.
-                let spawned_stmts = self.arena.alloc_from_iter(
-                    std::iter::once(shadow_copy_local_stmt).chain(body_block.stmts.iter().copied()),
+                // Place shadow_local_stmt right before body_block in the closure
+                let closure_stmts = self.arena.alloc_from_iter(
+                    std::iter::once(shadow_local_stmt).chain(body_block.stmts.iter().copied()),
                 );
-                let spawn_block =
-                    self.arena.alloc(hir::Block { stmts: spawned_stmts, ..*body_block });
+                let closure_body_block =
+                    self.arena.alloc(hir::Block { stmts: closure_stmts, ..*body_block });
 
                 // Look up the closure DefId that was pre-registered during name resolution
                 // (in def_collector.rs). Using local_def_id here (rather than create_def)
@@ -2173,18 +2119,9 @@ impl<'hir> LoweringContext<'_, 'hir> {
                 // Register the closure DefId
                 self.children.push((closure_def_id, hir::MaybeOwner::NonOwner(closure_hir_id)));
 
-                // Wrap the body in a cilk_spawn
-                // the fake closure def_id created for cilk_spawn is a child of the outer closure
-                let spawn_expr_val: rustc_hir::Expr<'_> =
-                    self.expr_spawn_block(spawn_block, closure_def_id);
-                let spawn_expr = self.arena.alloc(spawn_expr_val);
-                let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
-                let stmts_slice = self.arena.alloc_from_iter([shadow_local_stmt, spawn_stmt]);
-
                 // Create the closure body
-                let inner_block = self.block_all(body_block.span, stmts_slice, None);
-                let inner_block_expr = self.expr_block(inner_block);
-                let body_id = self.lower_body(|_this| (&[], inner_block_expr));
+                let closure_block_expr = self.expr_block(closure_body_block);
+                let body_id = self.lower_body(|_this| (&[], closure_block_expr));
 
                 // Create the function declaration
                 let fn_decl = self.arena.alloc(hir::FnDecl {
@@ -2207,6 +2144,7 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     fn_arg_span: Some(self.lower_span(body_block.span)),
                     kind: hir::ClosureKind::Closure,
                     constness: hir::Constness::NotConst,
+                    move_ident: Some(induction_var_ident),
                 });
 
                 let closure_expr_val = hir::Expr {
@@ -2215,26 +2153,17 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     span: self.lower_span(body_block.span),
                 };
 
-                // Create the inline and orphaning attributes
-                let inline_attr = attr::mk_attr_nested_word(
-                    &self.tcx.sess.psess.attr_id_generator,
-                    AttrStyle::Outer,
-                    Safety::Default,
-                    sym::inline,
-                    sym::always,
-                    head_span,
-                ); // TODO: are these the correct spans?
-                let orphaning_attr = attr::mk_attr_word(
-                    &self.tcx.sess.psess.attr_id_generator,
-                    AttrStyle::Outer,
-                    Safety::Default,
-                    sym::orphaning,
-                    head_span,
-                ); // TODO: are these the correct spans?
-                let attrs: AttrVec = thin_vec![inline_attr, orphaning_attr];
+                // Create the inline attribute
                 self.lower_attrs(
                     closure_hir_id,
-                    &attrs,
+                    &[attr::mk_attr_nested_word(
+                        &self.tcx.sess.psess.attr_id_generator,
+                        AttrStyle::Outer,
+                        Safety::Default,
+                        sym::inline,
+                        sym::always,
+                        head_span, // TODO: is this the correct span?
+                    )],
                     self.lower_span(body_block.span),
                     Target::Closure,
                 );
@@ -2247,9 +2176,17 @@ impl<'hir> LoweringContext<'_, 'hir> {
                     self.expr(body_block.span, hir::ExprKind::Call(closure_expr, empty_args));
                 let call_expr = self.arena.alloc(call_expr_val);
 
+                // Wrap the closure call in a cilk_spawn
+                let call_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(call_expr));
+                let spawned_stmts = self.arena.alloc_from_iter([call_stmt]);
+                let spawn_block = self.block_all(body_block.span, spawned_stmts, None);
+                let spawn_expr_val: rustc_hir::Expr<'_> =
+                    self.expr_spawn_block(spawn_block, closure_def_id);
+                let spawn_expr = self.arena.alloc(spawn_expr_val);
+
                 // Create outer body
-                let outer_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(call_expr));
-                let outer_stmts_slice = self.arena.alloc_from_iter([outer_stmt]);
+                let spawn_stmt = self.stmt(body_block.span, hir::StmtKind::Semi(spawn_expr));
+                let outer_stmts_slice = self.arena.alloc_from_iter([spawn_stmt]);
                 let outer_block = self.block_all(body_block.span, outer_stmts_slice, None);
                 let outer_block_expr_val = self.expr_block(outer_block);
 

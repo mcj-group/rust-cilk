@@ -48,7 +48,7 @@ use rustc_middle::ty::{
 };
 use rustc_middle::{bug, span_bug};
 use rustc_session::lint;
-use rustc_span::{BytePos, Pos, Span, Symbol, sym};
+use rustc_span::{BytePos, Ident, Pos, Span, Symbol, sym};
 use rustc_trait_selection::infer::InferCtxtExt;
 use tracing::{debug, instrument};
 
@@ -141,10 +141,22 @@ struct InferBorrowKindVisitor<'a, 'tcx> {
 impl<'a, 'tcx> Visitor<'tcx> for InferBorrowKindVisitor<'a, 'tcx> {
     fn visit_expr(&mut self, expr: &'tcx hir::Expr<'tcx>) {
         match expr.kind {
-            hir::ExprKind::Closure(&hir::Closure { capture_clause, body: body_id, .. }) => {
+            hir::ExprKind::Closure(&hir::Closure {
+                capture_clause,
+                body: body_id,
+                move_ident,
+                ..
+            }) => {
                 let body = self.fcx.tcx.hir_body(body_id);
                 self.visit_body(body);
-                self.fcx.analyze_closure(expr.hir_id, expr.span, body_id, body, capture_clause);
+                self.fcx.analyze_closure(
+                    expr.hir_id,
+                    expr.span,
+                    body_id,
+                    body,
+                    capture_clause,
+                    move_ident,
+                );
             }
             hir::ExprKind::CilkSpawn(spawn) => {
                 // analyzes nested closures first so the capture info can be reused
@@ -199,6 +211,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let (capture_information, _, _) = self.process_collected_capture_information(
             hir::CaptureBy::Ref,
             &delegate.capture_information,
+            None,
         );
         self.compute_min_captures(spawn_def_id, capture_information, span);
 
@@ -245,7 +258,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     // For any &T captured, it should also implement `Sync` to share across threads.
     // Disjoint capture in closure proposed in RFC2229 and implemented starting from Rust 2021 is followed here as we only check the
     // captured fields not the entire root variable.
-    // For raw_ptr types, the pointee should be Sync to allow shared reference across threads whereas pointer validity, memory safety 
+    // For raw_ptr types, the pointee should be Sync to allow shared reference across threads whereas pointer validity, memory safety
     // when using pointer, aliasing and data race conditions remain the responsibility of programmer as `unsafe` is used.
     fn require_cilk_thread_safe(
         &self,
@@ -281,6 +294,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         body_id: hir::BodyId,
         body: &'tcx hir::Body<'tcx>,
         mut capture_clause: hir::CaptureBy,
+        move_ident: Option<Ident>,
     ) {
         // Extract the type of the closure.
         let ty = self.node_ty(closure_hir_id);
@@ -419,7 +433,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.log_capture_analysis_first_pass(closure_def_id, &delegate.capture_information, span);
 
         let (capture_information, closure_kind, origin) = self
-            .process_collected_capture_information(capture_clause, &delegate.capture_information);
+            .process_collected_capture_information(
+                capture_clause,
+                &delegate.capture_information,
+                move_ident,
+            );
 
         self.compute_min_captures(closure_def_id, capture_information, span);
 
@@ -687,6 +705,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let (_, kind, _) = self.process_collected_capture_information(
             hir::CaptureBy::Ref,
             &delegate.capture_information,
+            None,
         );
 
         matches!(kind, ty::ClosureKind::FnOnce)
@@ -732,6 +751,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         &self,
         capture_clause: hir::CaptureBy,
         capture_information: &InferredCaptureInformation<'tcx>,
+        move_ident: Option<Ident>,
     ) -> (InferredCaptureInformation<'tcx>, ty::ClosureKind, Option<(Span, Place<'tcx>)>) {
         let mut closure_kind = ty::ClosureKind::LATTICE_BOTTOM;
         let mut origin: Option<(Span, Place<'tcx>)> = None;
@@ -781,6 +801,18 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 closure_kind = updated.0;
                 origin = updated.1;
 
+                let var_hir_id = match place.base {
+                    PlaceBase::Upvar(upvar_id) => upvar_id.var_path.hir_id,
+                    base => bug!("Expected upvar, found={:?}", base),
+                };
+                let var_ident = self.tcx.hir_ident(var_hir_id);
+
+                // usage_span is a placeholder span here
+                let capture_clause = if Some(var_ident) == move_ident {
+                    hir::CaptureBy::Value { move_kw: usage_span }
+                } else {
+                    capture_clause
+                };
                 let (place, capture_kind) = match capture_clause {
                     hir::CaptureBy::Value { .. } => adjust_for_move_closure(place, capture_kind),
                     hir::CaptureBy::Use { .. } => adjust_for_use_closure(place, capture_kind),

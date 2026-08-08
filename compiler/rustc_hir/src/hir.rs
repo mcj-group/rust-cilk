@@ -1701,6 +1701,9 @@ pub struct Closure<'hir> {
     /// The span of the argument block `|...|`
     pub fn_arg_span: Option<Span>,
     pub kind: ClosureKind,
+    /// allows marking up to one ident to be captured by value,
+    /// without using the move keyword and capturing everything by value
+    pub move_ident: Option<Ident>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Copy, Hash, HashStable_Generic, Encodable, Decodable)]
