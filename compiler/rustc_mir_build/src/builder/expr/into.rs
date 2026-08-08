@@ -253,19 +253,19 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
                     unpack!(body_block = this.expr_into_dest(tmp, body_block, body));
                     this.cfg.goto(body_block, source_info, loop_block);
 
-                    if tapir_loop_spawn {
-                        this.cfg.push(
-                            body_block,
-                            Statement::new(
-                                source_info,
-                                StatementKind::Intrinsic(Box::new(
-                                    NonDivergingIntrinsic::OrphaningSyncregion(
-                                        this.scopes.current_sync_region(),
-                                    ),
-                                )),
-                            ),
-                        );
-                    }
+                    // if tapir_loop_spawn {
+                    //     this.cfg.push(
+                    //         body_block,
+                    //         Statement::new(
+                    //             source_info,
+                    //             StatementKind::Intrinsic(Box::new(
+                    //                 NonDivergingIntrinsic::OrphaningSyncregion(
+                    //                     this.scopes.current_sync_region(),
+                    //                 ),
+                    //             )),
+                    //         ),
+                    //     );
+                    // }
 
                     // Loops are only exited by `break` expressions.
                     None
@@ -883,7 +883,7 @@ impl<'a, 'tcx> Builder<'a, 'tcx> {
 
                 // block that just reattaches
                 // multiple blocks can branch to it instead of having more than one reattach
-//
+                //
                 // branching to a reattach block was done to handle reattaches in hir
                 // we don't use these at the moment
                 let reattach_block = this.cfg.start_new_block();
