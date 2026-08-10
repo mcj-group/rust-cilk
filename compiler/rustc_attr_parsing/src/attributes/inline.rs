@@ -30,7 +30,7 @@ impl<S: Stage> SingleAttributeParser<S> for InlineParser {
     ]);
     const TEMPLATE: AttributeTemplate = template!(
         Word,
-        List: &["always", "never"],
+        List: &["always", "never", "backend"],
         "https://doc.rust-lang.org/reference/attributes/codegen.html#the-inline-attribute"
     );
 
@@ -50,8 +50,14 @@ impl<S: Stage> SingleAttributeParser<S> for InlineParser {
                     Some(sym::never) => {
                         Some(AttributeKind::Inline(InlineAttr::Never, cx.attr_span))
                     }
+                    Some(sym::backend) => {
+                        Some(AttributeKind::Inline(InlineAttr::Backend, cx.attr_span))
+                    }
                     _ => {
-                        cx.expected_specific_argument(l.span(), &[sym::always, sym::never]);
+                        cx.expected_specific_argument(
+                            l.span(),
+                            &[sym::always, sym::never, sym::backend],
+                        );
                         return None;
                     }
                 }

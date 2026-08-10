@@ -37,7 +37,7 @@ fn recursively_inline<'gcc, 'tcx>(
         // Check if the called function is recursively inline.
         if matches!(
             cx.tcx.codegen_fn_attrs(def).inline,
-            InlineAttr::Always | InlineAttr::Force { .. }
+            InlineAttr::Always | InlineAttr::Backend | InlineAttr::Force { .. }
         ) {
             return true;
         }
@@ -54,7 +54,7 @@ fn inline_attr<'gcc, 'tcx>(
     instance: ty::Instance<'tcx>,
 ) -> Option<FnAttribute<'gcc>> {
     match inline {
-        InlineAttr::Always => {
+        InlineAttr::Always | InlineAttr::Backend => {
             // We can't simply always return `always_inline` unconditionally.
             // It is *NOT A HINT* and does not work for recursive functions.
             //

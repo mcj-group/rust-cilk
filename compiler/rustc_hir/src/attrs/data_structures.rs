@@ -107,6 +107,14 @@ pub enum InlineAttr {
     Hint,
     Always,
     Never,
+    /// `#[inline(backend)]` defers inlining entirely to the codegen backend: the MIR inliner
+    /// never inlines such a function (the same way `#[orphaning]` prevents it), while the
+    /// backend is told to always inline it, like `#[inline(always)]` does.
+    ///
+    /// This is used when lowering `cilk_for`, whose loop body closure must survive MIR
+    /// untouched, as otherwise allocas in the loop body will be transposed to the parent function,
+    /// but should still be inlined away by LLVM.
+    Backend,
     /// `#[rustc_force_inline]` forces inlining to happen in the MIR inliner - it reports an error
     /// if the inlining cannot happen. It is limited to only free functions so that the calls
     /// can always be resolved.
@@ -119,7 +127,7 @@ pub enum InlineAttr {
 impl InlineAttr {
     pub fn always(&self) -> bool {
         match self {
-            InlineAttr::Always | InlineAttr::Force { .. } => true,
+            InlineAttr::Always | InlineAttr::Backend | InlineAttr::Force { .. } => true,
             InlineAttr::None | InlineAttr::Hint | InlineAttr::Never => false,
         }
     }

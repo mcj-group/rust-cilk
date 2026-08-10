@@ -17,6 +17,7 @@ use rustc_middle::ty::adjustment::{
 };
 use rustc_middle::ty::{
     self, AdtKind, GenericArgs, InlineConstArgs, InlineConstArgsParts, ScalarInt, Ty, UpvarArgs,
+    UpvarCapture,
 };
 use rustc_middle::{bug, span_bug};
 use rustc_span::Span;
@@ -684,7 +685,7 @@ impl<'tcx> ThirBuildCx<'tcx> {
                 }
             },
 
-            hir::ExprKind::Closure(hir::Closure { .. }) => {
+            hir::ExprKind::Closure(hir::Closure { move_ident, .. }) => {
                 let closure_ty = self.typeck_results.expr_ty(expr);
                 let (def_id, args, movability) = match *closure_ty.kind() {
                     ty::Closure(def_id, args) => (def_id, UpvarArgs::Closure(args), None),
@@ -706,7 +707,16 @@ impl<'tcx> ThirBuildCx<'tcx> {
                     .iter()
                     .zip_eq(args.upvar_tys())
                     .map(|(captured_place, ty)| {
-                        let upvars = self.capture_upvar(expr, captured_place, ty);
+                        let upvars = self.capture_upvar(
+                            expr,
+                            captured_place,
+                            ty,
+                            if Some(captured_place.var_ident) == *move_ident {
+                                UpvarCapture::ByValue
+                            } else {
+                                captured_place.info.capture_kind
+                            },
+                        );
                         self.thir.exprs.push(upvars)
                     })
                     .collect();
@@ -1405,8 +1415,8 @@ impl<'tcx> ThirBuildCx<'tcx> {
         closure_expr: &'tcx hir::Expr<'tcx>,
         captured_place: &'tcx ty::CapturedPlace<'tcx>,
         upvar_ty: Ty<'tcx>,
+        upvar_capture: UpvarCapture,
     ) -> Expr<'tcx> {
-        let upvar_capture = captured_place.info.capture_kind;
         let captured_place_expr =
             self.convert_captured_hir_place(closure_expr, captured_place.place.clone());
         let temp_scope_id = closure_expr.hir_id.local_id;

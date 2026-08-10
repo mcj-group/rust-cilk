@@ -60,7 +60,7 @@ pub(crate) fn inline_attr<'ll, 'tcx>(
     }
     match inline {
         InlineAttr::Hint => Some(AttributeKind::InlineHint.create_attr(cx.llcx)),
-        InlineAttr::Always | InlineAttr::Force { .. } => {
+        InlineAttr::Always | InlineAttr::Backend | InlineAttr::Force { .. } => {
             Some(AttributeKind::AlwaysInline.create_attr(cx.llcx))
         }
         InlineAttr::Never => {

@@ -550,7 +550,9 @@ impl JoinSemiLattice for MaybeUninitializedPlacesDomain {
             let mut uninitialized_by_child = other.current.clone();
             uninitialized_by_child.subtract(&self.current);
 
-            self.children.subtract(&initialized_by_child) | self.children.join(&uninitialized_by_child) | self.current.join(&uninitialized_by_child)
+            self.children.subtract(&initialized_by_child)
+                | self.children.join(&uninitialized_by_child)
+                | self.current.join(&uninitialized_by_child)
         } else {
             self.current.join(&other.current) | self.children.join(&other.children)
         }
