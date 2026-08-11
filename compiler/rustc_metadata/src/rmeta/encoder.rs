@@ -1425,8 +1425,7 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             // `cilk_spawn` has a synthetic closure-like `DefId` solely for local upvar
             // and Send/Sync capture analysis. It has no independent generics, type, or
             // MIR body that a downstream crate could reference.
-            if def_kind == DefKind::Closure
-                && tcx.hir_maybe_cilk_spawn_owned_by(local_id).is_some()
+            if def_kind == DefKind::Closure && tcx.hir_maybe_cilk_spawn_owned_by(local_id).is_some()
             {
                 continue;
             }

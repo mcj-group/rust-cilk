@@ -33,9 +33,7 @@ use rustc_hir::def_id::DefId;
 use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
-use rustc_middle::mir::{
-    BasicBlock, Body, ConstraintCategory, Local, Location, TerminatorKind,
-};
+use rustc_middle::mir::{BasicBlock, Body, ConstraintCategory, Local, Location, TerminatorKind};
 use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
 use rustc_span::Span;
@@ -242,9 +240,7 @@ pub(crate) fn continuation_points<'tcx>(
         }
 
         match bb_data.terminator().kind {
-            TerminatorKind::Sync { sync_region, .. }
-                if sync_region == expected_sync_region =>
-            {
+            TerminatorKind::Sync { sync_region, .. } if sync_region == expected_sync_region => {
                 // Matching synchronization boundary; do not cross.
             }
             TerminatorKind::Return
