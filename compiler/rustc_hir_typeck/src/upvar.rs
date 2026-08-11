@@ -258,8 +258,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     // For any &T captured, it should also implement `Sync` to share across threads.
     // Disjoint capture in closure proposed in RFC2229 and implemented starting from Rust 2021 is followed here as we only check the
     // captured fields not the entire root variable.
-    // For raw_ptr types, the pointee should be Sync to allow shared reference across threads whereas pointer validity, memory safety
-    // when using pointer, aliasing and data race conditions remain the responsibility of programmer as `unsafe` is used.
+    // For raw_ptr types, no requirements is added for programmer flexibility as it falls under `unsafe` nothing is promised.
     fn require_cilk_thread_safe(
         &self,
         place_ty: Ty<'tcx>,
@@ -269,9 +268,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     ) {
         let is_shared_capture = matches!(capture_kind, UpvarCapture::ByRef(BorrowKind::Immutable));
 
-        //
         let (check_send_ty, check_sync_ty) = match *place_ty.kind() {
-            ty::RawPtr(pointee_ty, _) => (None, Some(pointee_ty)),
+            ty::RawPtr(..) => (None, None),
             _ if is_shared_capture => (None, Some(place_ty)),
             _ => (Some(capture_ty), None),
         };

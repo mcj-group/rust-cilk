@@ -1422,6 +1422,17 @@ impl<'a, 'tcx> EncodeContext<'a, 'tcx> {
             let def_kind = tcx.def_kind(local_id);
             self.tables.def_kind.set_some(def_id.index, def_kind);
 
+            // `cilk_spawn` has a synthetic closure-like `DefId` used only as a key for
+            // local upvar and Send/Sync capture analysis. The spawn expression remains
+            // part of its enclosing body's HIR and is lowered into that owner's MIR; this
+            // synthetic definition does not independently own a HIR `BodyId`, type,
+            // generics, or MIR body. Therefore there is no per-definition metadata to
+            // export for downstream crates.
+            if def_kind == DefKind::Closure && tcx.hir_maybe_cilk_spawn_owned_by(local_id).is_some()
+            {
+                continue;
+            }
+
             // The `DefCollector` will sometimes create unnecessary `DefId`s
             // for trivial const arguments which are directly lowered to
             // `ConstArgKind::Path`. We never actually access this `DefId`

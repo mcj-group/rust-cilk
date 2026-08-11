@@ -33,9 +33,7 @@ use rustc_hir::def_id::DefId;
 use rustc_infer::infer::NllRegionVariableOrigin;
 use rustc_middle::bug;
 use rustc_middle::mir::visit::{PlaceContext, Visitor};
-use rustc_middle::mir::{
-    BasicBlock, Body, BorrowKind, ConstraintCategory, Local, LocalInfo, Location, TerminatorKind,
-};
+use rustc_middle::mir::{BasicBlock, Body, ConstraintCategory, Local, Location, TerminatorKind};
 use rustc_middle::ty::{self, RegionVid, TyCtxt};
 use rustc_mir_dataflow::task_info::{Task, TaskInfo};
 use rustc_span::Span;
@@ -66,6 +64,7 @@ pub(crate) fn body_has_cilk_tasks(body: &Body<'_>) -> bool {
 /// attribute. The closure itself appears as the receiver: the trait-method
 /// `FnDef`'s first generic argument is the closure's `Self` type. We recover
 /// that type, pull out the closure's `DefId`, and check *its* [`OrphaningAttr`].
+#[allow(dead_code)]
 fn blocks_calling_orphaning_closure<'tcx>(
     body: &Body<'tcx>,
     tcx: TyCtxt<'tcx>,
@@ -124,12 +123,12 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
     infcx: &BorrowckInferCtxt<'tcx>,
     constraints: &mut MirTypeckRegionConstraints<'tcx>,
     borrow_set: &BorrowSet<'tcx>,
-    tcx: TyCtxt<'tcx>,
+    _tcx: TyCtxt<'tcx>,
 ) {
     let task_info = TaskInfo::from_body(body);
     for task in task_info.child_tasks() {
         let reattach_loc = task_info.expect_last_location(task);
-        let TerminatorKind::Reattach { sync_region: _, continuation } =
+        let TerminatorKind::Reattach { sync_region, continuation } =
             body.basic_blocks[reattach_loc.block].terminator().kind
         else {
             bug!(
@@ -137,7 +136,7 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
                 body.basic_blocks[reattach_loc.block].terminator().kind,
             );
         };
-        let points = continuation_points(body, continuation);
+        let points = continuation_points(body, continuation, sync_region);
         if points.is_empty() {
             continue;
         }
@@ -152,47 +151,49 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
         }
     }
 
-    for (orphaning_call_block, successor, orphaning_closure_id) in
-        blocks_calling_orphaning_closure(body, tcx)
-    {
-        let points = continuation_points(body, successor);
-        if points.is_empty() {
-            continue;
-        }
-        let mut regions = FxIndexSet::default();
-        for (_, bw) in borrow_set.location_map.iter() {
-            if bw.reserve_location.block == orphaning_call_block
-                && let BorrowKind::Mut { .. } = bw.kind
-            {
-                let local_decl = &body.local_decls[bw.borrowed_place.local];
+    // // (legacy code) used for cilk_for lowered into orphaning closure.
+    // //  It is not deleted in case of any potential reuse in the future.
+    // for (orphaning_call_block, successor, orphaning_closure_id) in
+    //     blocks_calling_orphaning_closure(body, tcx)
+    // {
+    //     let points = continuation_points(body, successor);
+    //     if points.is_empty() {
+    //         continue;
+    //     }
+    //     let mut regions = FxIndexSet::default();
+    //     for (_, bw) in borrow_set.location_map.iter() {
+    //         if bw.reserve_location.block == orphaning_call_block
+    //             && let BorrowKind::Mut { .. } = bw.kind
+    //         {
+    //             let local_decl = &body.local_decls[bw.borrowed_place.local];
 
-                // Calling a closure that mutably captures a variable introduces a separate mutable
-                // borrow of the closure call object itself. This borrow only exists to invoke the
-                // closure, and is categorized as `LocalInfo::Boring` with a closure type. Extending
-                // this call-site borrow would unnecessarily keep the closure object mutably borrowed
-                // until the sync, rather than allowing it to become `StorageDead` immediately after
-                // the call. Therefore, skip the closure called by orphaning block's terminator.
-                if matches!(local_decl.local_info(), LocalInfo::Boring)
-                    && matches!(
-                        local_decl.ty.kind(),
-                        ty::Closure(closure_id, _) if *closure_id == orphaning_closure_id
-                    )
-                {
-                    continue;
-                }
+    //             // Calling a closure that mutably captures a variable introduces a separate mutable
+    //             // borrow of the closure call object itself. This borrow only exists to invoke the
+    //             // closure, and is categorized as `LocalInfo::Boring` with a closure type. Extending
+    //             // this call-site borrow would unnecessarily keep the closure object mutably borrowed
+    //             // until the sync, rather than allowing it to become `StorageDead` immediately after
+    //             // the call. Therefore, skip the closure called by orphaning block's terminator.
+    //             if matches!(local_decl.local_info(), LocalInfo::Boring)
+    //                 && matches!(
+    //                     local_decl.ty.kind(),
+    //                     ty::Closure(closure_id, _) if *closure_id == orphaning_closure_id
+    //                 )
+    //             {
+    //                 continue;
+    //             }
 
-                regions.insert(bw.region);
-            }
-        }
-        if regions.is_empty() {
-            continue;
-        }
-        let span = body.basic_blocks[orphaning_call_block].terminator().source_info.span;
-        let c_region = create_continuation_region(infcx, constraints, points);
-        for b_region in regions {
-            add_extension_constraint(constraints, b_region, c_region, span);
-        }
-    }
+    //             regions.insert(bw.region);
+    //         }
+    //     }
+    //     if regions.is_empty() {
+    //         continue;
+    //     }
+    //     let span = body.basic_blocks[orphaning_call_block].terminator().source_info.span;
+    //     let c_region = create_continuation_region(infcx, constraints, points);
+    //     for b_region in regions {
+    //         add_extension_constraint(constraints, b_region, c_region, span);
+    //     }
+    // }
 }
 
 /// Enumerate the CFG locations on the parent's continuation flow that span
@@ -217,6 +218,7 @@ pub(crate) fn extend_cilk_borrow_lifetimes<'tcx>(
 pub(crate) fn continuation_points<'tcx>(
     body: &Body<'tcx>,
     start_block: BasicBlock,
+    expected_sync_region: Local,
 ) -> Vec<Location> {
     let mut queue = WorkQueue::with_none(body.basic_blocks.len());
     queue.insert(start_block);
@@ -238,8 +240,10 @@ pub(crate) fn continuation_points<'tcx>(
         }
 
         match bb_data.terminator().kind {
-            TerminatorKind::Sync { .. }
-            | TerminatorKind::Return
+            TerminatorKind::Sync { sync_region, .. } if sync_region == expected_sync_region => {
+                // Matching synchronization boundary; do not cross.
+            }
+            TerminatorKind::Return
             | TerminatorKind::UnwindResume
             | TerminatorKind::UnwindTerminate(_)
             | TerminatorKind::CoroutineDrop => {
