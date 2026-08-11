@@ -1,0 +1,12 @@
+error[E0499]: cannot borrow `x` as mutable more than once at a time
+  --> $DIR/cilk_spawn_borrow_lifetime_extended_to_correct_cilk_sync.rs:23:18
+   |
+LL |         let first = &mut x;
+   |                     ------ first mutable borrow occurs here
+...
+LL |     let second = &mut x;
+   |                  ^^^^^^ second mutable borrow occurs here
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0499`.

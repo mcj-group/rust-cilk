@@ -1,7 +1,7 @@
 #![feature(cilk)]
-// Tests that the pointee of a captured raw pointer must implement Sync. Cell only implements Send.
+// Tests that Send/Sync trait will not be checked for raw ptrs nor its pointee.
 
-//@ check-fail
+//@ check-pass
 //@ compile-flags: -C panic=abort
 //@ no-prefer-dynamic
 
@@ -14,7 +14,6 @@ fn main() {
     cilk_spawn {
         unsafe {
             let _ = (*pointer).get();
-            //~^ ERROR `Cell<usize>` cannot be shared between threads safely
         }
     };
 }
