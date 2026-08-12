@@ -1,10 +1,11 @@
 use rustc_abi::VariantIdx;
 use rustc_data_structures::assert_matches;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_index::Idx;
 use rustc_index::bit_set::{DenseBitSet, MixedBitSet};
 use rustc_middle::bug;
 use rustc_middle::mir::{
-    self, Body, CallReturnPlaces, Location, SwitchTargetValue, TerminatorEdges,
+    self, Body, CallReturnPlaces, Local, Location, SwitchTargetValue, TerminatorEdges,
 };
 use rustc_middle::ty::util::Discr;
 use rustc_middle::ty::{self, TyCtxt};
@@ -502,26 +503,28 @@ pub struct MaybeUninitializedPlacesDomain {
     /// which paths are maybe uninitialized in the current task
     /// this is the important part for determining liveness
     pub current: MixedBitSet<MovePathIndex>,
-    /// which paths are maybe uninitialized across all child tasks
+    /// which paths are maybe uninitialized across all child tasks in a given sync region
     /// in other words, which values would be still uninitialized after a sync, always a subset of current
     /// these serve as auxiliary bits used to track liveness in multi-task functions
-    pub children: MixedBitSet<MovePathIndex>,
-    /// flags state at the end of a task, after its reattach
+    /// all sync regions implicitly map to current if they aren't explicitly in the map
+    pub children: FxHashMap<Local, MixedBitSet<MovePathIndex>>,
+    /// flags state at the end of a task, after its reattach, and indicates the sync region being reattached
     /// this flag helps us to propagate state out of a child task correctly
-    pub from_reattach: bool,
+    pub from_reattach: Option<Local>,
 }
 
 impl MaybeUninitializedPlacesDomain {
     fn insert_all(&mut self) {
         self.current.insert_all();
-        self.children.insert_all();
+        #[allow(rustc::potential_query_instability)]
+        self.children.iter_mut().for_each(|(_sync_region, state)| state.insert_all());
     }
 
     fn new_empty(domain_size: usize) -> Self {
         Self {
             current: MixedBitSet::new_empty(domain_size),
-            children: MixedBitSet::new_empty(domain_size),
-            from_reattach: false,
+            children: FxHashMap::default(),
+            from_reattach: None,
         }
     }
 }
@@ -529,18 +532,20 @@ impl MaybeUninitializedPlacesDomain {
 impl GenKill<MovePathIndex> for MaybeUninitializedPlacesDomain {
     fn gen_(&mut self, elem: MovePathIndex) {
         self.current.gen_(elem);
-        self.children.gen_(elem);
+        #[allow(rustc::potential_query_instability)]
+        self.children.iter_mut().for_each(|(_sync_region, state)| state.gen_(elem));
     }
 
     fn kill(&mut self, elem: MovePathIndex) {
         self.current.kill(elem);
-        self.children.kill(elem);
+        #[allow(rustc::potential_query_instability)]
+        self.children.iter_mut().for_each(|(_sync_region, state)| state.kill(elem));
     }
 }
 
 impl JoinSemiLattice for MaybeUninitializedPlacesDomain {
     fn join(&mut self, other: &Self) -> bool {
-        if other.from_reattach {
+        if let Some(sync_region) = other.from_reattach {
             // if the child task initialized variables, propagate them to the parent's child bits
             // if the child task uninitialized variables, propagate them to the parent's current and child bits i.e. the
             // variable becomes unavailable immediately
@@ -550,11 +555,29 @@ impl JoinSemiLattice for MaybeUninitializedPlacesDomain {
             let mut uninitialized_by_child = other.current.clone();
             uninitialized_by_child.subtract(&self.current);
 
-            self.children.subtract(&initialized_by_child)
-                | self.children.join(&uninitialized_by_child)
-                | self.current.join(&uninitialized_by_child)
+            // No instability, does sync-region wise operation (commutative) followed by disjunction (commutative)
+            #[allow(rustc::potential_query_instability)]
+            return self
+                .children
+                .entry(sync_region)
+                .or_insert_with(|| self.current.clone())
+                .subtract(&initialized_by_child)
+                // fold prevents short circuiting (unlike any)
+                | self.children.iter_mut().fold(false, |b, (_sync_region, state)| {
+                    b | state.join(&uninitialized_by_child)
+                })
+                | self.current.join(&uninitialized_by_child);
         } else {
-            self.current.join(&other.current) | self.children.join(&other.children)
+            #[allow(rustc::potential_query_instability)]
+            // add every key from other into self
+            other.children.iter().for_each(|(sync_region, _state)| {
+                self.children.entry(*sync_region).or_insert_with(|| self.current.clone());
+            });
+            #[allow(rustc::potential_query_instability)]
+            return self.current.join(&other.current)
+                | self.children.iter_mut().fold(false, |b, (sync_region, state)| {
+                    b | state.join(other.children.get(sync_region).unwrap_or(&other.current))
+                });
         }
     }
 }
@@ -615,12 +638,18 @@ impl<'tcx> Analysis<'tcx> for MaybeUninitializedPlaces<'_, 'tcx> {
             Self::update_bits(state, path, s)
         });
         match terminator.kind {
-            mir::TerminatorKind::Sync { .. } => {
+            mir::TerminatorKind::Sync { sync_region, .. } => {
                 // upon sync, propagate state from child tasks
-                state.current.clone_from(&state.children);
+                if let Some(update) = state.children.get(&sync_region) {
+                    state.current.clone_from(update);
+                    #[allow(rustc::potential_query_instability)]
+                    state.children.iter_mut().for_each(|(_sync_region, child_state)| {
+                        child_state.intersect(&state.current);
+                    });
+                }
             }
-            mir::TerminatorKind::Reattach { .. } => {
-                state.from_reattach = true;
+            mir::TerminatorKind::Reattach { sync_region, .. } => {
+                state.from_reattach = Some(sync_region);
             }
             _ => (),
         }
