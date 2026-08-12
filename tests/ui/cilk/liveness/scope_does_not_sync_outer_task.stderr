@@ -1,0 +1,15 @@
+error[E0381]: used binding `x` is possibly-uninitialized
+  --> $DIR/scope_does_not_sync_outer_task.rs:16:16
+   |
+LL |     let x;
+   |         - binding declared here but left uninitialized
+LL |     cilk_spawn {
+LL |         x = 0
+   |         ----- binding initialized here in some conditions
+...
+LL |     println!("{x}");
+   |                ^ `x` used here but it is possibly-uninitialized
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0381`.
